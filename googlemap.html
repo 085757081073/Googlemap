@@ -16,26 +16,41 @@
     button {
       background: #4285f4; color: white; border: none; border-radius: 6px;
     }
+    .pin-btn {
+      background: #fbbc04; color: black;
+    }
+    .info-style {
+      background-color: rgba(255, 255, 255, 0.6); 
+      padding: 6px 10px; 
+      border-radius: 6px;
+      font-weight: bold; 
+      color: #444;
+      font-size: 14px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
+    }
   </style>
 </head>
 <body>
   <div class="panel">
-    <input id="fromInput" type="text" placeholder="Titik Awal" />
-    <input id="toInput" type="text" placeholder="Titik Tujuan" />
-    <button onclick="cariRute()">Cari Rute</button>
+    <input id="fromInput" type="text" placeholder="Titik Awal" onclick="showPinButton('from')" />
+    <button id="fromPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('from')">Cari di Peta</button><input id="toInput" type="text" placeholder="Titik Tujuan" onclick="showPinButton('to')" />
+<button id="toPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('to')">Cari di Peta</button>
+
   </div>
   <div id="map"></div>  <script>
     let map, directionsService, directionsRenderer;
     let markerA, markerB;
+    let pinDropMode = null;
+    let infoWindowB;
 
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const order = urlParams.get("order")?.split(',').map(Number);
 
     const iconUrls = {
-      motor: "https://cdn-icons-png.flaticon.com/128/5811/5811823.png",
-      mobil: "https://cdn-icons-png.flaticon.com/128/12689/12689302.png",
-      kurir: "https://cdn-icons-png.flaticon.com/128/9561/9561688.png"
+      motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
+      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
+      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png'
     };
 
     function hitungJarak(lat1, lon1, lat2, lon2) {
@@ -44,6 +59,27 @@
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function showPinButton(type) {
+      document.getElementById("fromPinBtn").style.display = (type === 'from') ? "block" : "none";
+      document.getElementById("toPinBtn").style.display = (type === 'to') ? "block" : "none";
+    }
+
+    function enablePinDrop(type) {
+      pinDropMode = type;
+      alert("Silakan klik di peta untuk memilih titik " + (type === 'from' ? 'awal' : 'tujuan'));
+    }
+
+    function reverseGeocode(latlng, callback) {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ location: latlng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          callback(results[0].formatted_address);
+        } else {
+          callback("Alamat tidak ditemukan");
+        }
+      });
     }
 
     function initMap() {
@@ -70,11 +106,9 @@
           position: place.geometry.location,
           map,
           draggable: true,
-          icon: {
-            url: iconUrls[vehicle],
-            scaledSize: new google.maps.Size(40, 40)
-          }
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
+        tryDirection();
       });
 
       toAutocomplete.addListener("place_changed", () => {
@@ -86,11 +120,43 @@
           map,
           draggable: true
         });
+        tryDirection();
+      });
+
+      map.addListener("click", (e) => {
+        if (!pinDropMode) return;
+        const latlng = e.latLng;
+
+        if (pinDropMode === 'from') {
+          if (markerA) markerA.setMap(null);
+          markerA = new google.maps.Marker({
+            position: latlng,
+            map,
+            draggable: true,
+            icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+          });
+          reverseGeocode(latlng, (alamat) => {
+            document.getElementById("fromInput").value = alamat;
+            tryDirection();
+          });
+        } else if (pinDropMode === 'to') {
+          if (markerB) markerB.setMap(null);
+          markerB = new google.maps.Marker({
+            position: latlng,
+            map,
+            draggable: true
+          });
+          reverseGeocode(latlng, (alamat) => {
+            document.getElementById("toInput").value = alamat;
+            tryDirection();
+          });
+        }
+        pinDropMode = null;
       });
     }
 
-    function cariRute() {
-      if (!markerA || !markerB) return alert("Silakan pilih lokasi awal dan tujuan");
+    function tryDirection() {
+      if (!markerA || !markerB) return;
 
       const from = markerA.getPosition();
       const to = markerB.getPosition();
@@ -104,17 +170,13 @@
           directionsRenderer.setDirections(res);
           const leg = res.routes[0].legs[0];
 
-          if (order) {
-            const jrkA = hitungJarak(order[0], order[1], from.lat(), from.lng());
-            new google.maps.InfoWindow({
-              content: jrkA < 1 ? `${(jrkA * 1000).toFixed(0)} m` : `${jrkA.toFixed(2)} km`
-            }).open(map, markerA);
+          if (infoWindowB) infoWindowB.close();
 
-            const jrkB = hitungJarak(order[0], order[1], to.lat(), to.lng());
-            new google.maps.InfoWindow({
-              content: jrkB < 1 ? `${(jrkB * 1000).toFixed(0)} m` : `${jrkB.toFixed(2)} km`
-            }).open(map, markerB);
-          }
+          const jarakKm = leg.distance.value / 1000;
+          infoWindowB = new google.maps.InfoWindow({
+            content: `<div class='info-style'>${jarakKm < 1 ? leg.distance.value.toFixed(0) + ' m' : jarakKm.toFixed(2) + ' km'}</div>`
+          });
+          infoWindowB.open(map, markerB);
 
           const hasil = {
             jarak: leg.distance.text,
@@ -128,8 +190,6 @@
           if (window.AppInventor) {
             window.AppInventor.setWebViewString(JSON.stringify(hasil));
           }
-        } else {
-          alert("Gagal menghitung rute: " + status);
         }
       });
     }
