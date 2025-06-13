@@ -51,7 +51,19 @@
 
     function enablePinDrop(type) {
       pinDropMode = type;
-      alert("Silakan klik di peta untuk memilih titik " + (type === 'from' ? 'awal' : 'tujuan'));
+      const infoBox = document.createElement("div");
+infoBox.textContent = "Silakan klik di peta untuk memilih titik " + (type === 'from' ? 'awal' : 'tujuan');
+infoBox.style.position = "absolute";
+infoBox.style.top = "50%";
+infoBox.style.left = "50%";
+infoBox.style.transform = "translate(-50%, -50%)";
+infoBox.style.padding = "10px 20px";
+infoBox.style.background = "rgba(0,0,0,0.7)";
+infoBox.style.color = "#fff";
+infoBox.style.borderRadius = "8px";
+infoBox.style.zIndex = "9999";
+document.body.appendChild(infoBox);
+setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
     }
 
     function reverseGeocode(latlng, callback) {
