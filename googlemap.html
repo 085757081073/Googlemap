@@ -35,6 +35,8 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
+    const orderParam = urlParams.get("order");
+    const order = orderParam ? orderParam.split(',').map(Number) : null;
 
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
@@ -66,7 +68,7 @@
     function initMap() {
       map = new google.maps.Map(document.getElementById("map"), {
         center: order ? { lat: order[0], lng: order[1] } : { lat: -6.2, lng: 106.8 },
-        zoom: 13,
+        zoom: 14
       });
 
       directionsService = new google.maps.DirectionsService();
