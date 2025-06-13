@@ -1,3 +1,4 @@
+script></body>
 <!DOCTYPE html><html>
 <head>
   <meta charset="utf-8" />
@@ -78,6 +79,15 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
     }
 
     function initMap() {
+      const regionParam = urlParams.get("region") || "sulut";
+      let boundsSulut;
+      if (regionParam === "sulut") {
+        boundsSulut = new google.maps.LatLngBounds(
+          new google.maps.LatLng(0.3, 123.5), // barat daya Sulut
+          new google.maps.LatLng(4.3, 126.0)  // timur laut Sulut
+        );
+      }
+
       map = new google.maps.Map(document.getElementById("map"), {
         center: order ? { lat: order[0], lng: order[1] } : { lat: -6.2, lng: 106.8 },
         zoom: 14
@@ -87,8 +97,16 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      const fromAutocomplete = new google.maps.places.Autocomplete(document.getElementById("fromInput"));
-      const toAutocomplete = new google.maps.places.Autocomplete(document.getElementById("toInput"));
+      const fromAutocomplete = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
+        componentRestrictions: { country: "ID" },
+        bounds: boundsSulut,
+        strictBounds: true
+      });
+      const toAutocomplete = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
+        componentRestrictions: { country: "ID" },
+        bounds: boundsSulut,
+        strictBounds: true
+      });
 
       fromAutocomplete.setFields(["geometry"]);
       toAutocomplete.setFields(["geometry"]);
@@ -186,4 +204,4 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
       });
     }
   </script>  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script></body>
-</html>
+</html></html>
