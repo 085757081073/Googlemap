@@ -1,14 +1,27 @@
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
 <head>
   <meta charset="utf-8" />
   <title>Pilih Lokasi Ojek</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    html, body, #map { height: 100%; margin: 0; font-family: sans-serif; }
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      font-family: sans-serif;
+    }
     .panel {
-      position: absolute; top: 10px; left: 10px; background: rgba(255, 255, 255, 0.8); padding: 10px;
-      z-index: 5; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      width: calc(100% - 20px); max-width: 100%; box-sizing: border-box;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      z-index: 5;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      width: calc(100% - 20px);
+      max-width: 100%;
+      box-sizing: border-box;
     }
     input, button {
       width: 100%;
@@ -19,24 +32,44 @@
       font-size: 16px;
     }
     button {
-      background: #4285f4; color: white; border: none; border-radius: 6px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 6px;
     }
     .pin-btn {
-      background: #fbbc04; color: black;
+      background: #fbbc04;
+      color: black;
+    }
+    #lokasiSayaBtn {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 5;
+      padding: 10px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
   <div class="panel">
     <input id="fromInput" type="text" placeholder="Titik Awal" onclick="showPinButton('from')" />
-    <button id="fromPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('from')">Cari di Peta</button><input id="toInput" type="text" placeholder="Titik Tujuan" onclick="showPinButton('to')" />
-<button id="toPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('to')">Cari di Peta</button>
+    <button id="fromPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('from')">Cari di Peta</button>
 
+    <input id="toInput" type="text" placeholder="Titik Tujuan" onclick="showPinButton('to')" />
+    <button id="toPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('to')">Cari di Peta</button>
   </div>
-  <div id="map"></div>  <script>
+  <div id="map"></div>
+  <button id="lokasiSayaBtn" onclick="centerKeLokasi()">📍 Lokasi Saya</button>
+
+  <script>
     let map, directionsService, directionsRenderer;
-    let markerA, markerB;
+    let markerA, markerB, circleB;
     let pinDropMode = null;
+    let fitBoundsOnce = false;
 
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
@@ -57,18 +90,56 @@
     function enablePinDrop(type) {
       pinDropMode = type;
       const infoBox = document.createElement("div");
-infoBox.textContent = "Silakan klik di peta untuk memilih titik " + (type === 'from' ? 'awal' : 'tujuan');
-infoBox.style.position = "absolute";
-infoBox.style.top = "50%";
-infoBox.style.left = "50%";
-infoBox.style.transform = "translate(-50%, -50%)";
-infoBox.style.padding = "10px 20px";
-infoBox.style.background = "rgba(0,0,0,0.7)";
-infoBox.style.color = "#fff";
-infoBox.style.borderRadius = "8px";
-infoBox.style.zIndex = "9999";
-document.body.appendChild(infoBox);
-setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
+      infoBox.textContent = "Silakan geser marker untuk memilih titik " + (type === 'from' ? 'awal' : 'tujuan');
+      infoBox.style.position = "absolute";
+      infoBox.style.top = "50%";
+      infoBox.style.left = "50%";
+      infoBox.style.transform = "translate(-50%, -50%)";
+      infoBox.style.padding = "10px 20px";
+      infoBox.style.background = "rgba(0,0,0,0.7)";
+      infoBox.style.color = "#fff";
+      infoBox.style.borderRadius = "8px";
+      infoBox.style.zIndex = "9999";
+      document.body.appendChild(infoBox);
+      setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
+
+      const center = map.getCenter();
+      if (type === 'from') {
+        if (markerA) markerA.setMap(null);
+        markerA = new google.maps.Marker({
+          position: center,
+          map,
+          draggable: true,
+          animation: google.maps.Animation.DROP,
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+        });
+        updateFrom(markerA.getPosition());
+        markerA.addListener("dragend", () => updateFrom(markerA.getPosition()));
+      } else if (type === 'to') {
+        if (markerB) markerB.setMap(null);
+        markerB = new google.maps.Marker({
+          position: center,
+          map,
+          draggable: true,
+          animation: google.maps.Animation.DROP
+        });
+        updateTo(markerB.getPosition());
+        markerB.addListener("dragend", () => updateTo(markerB.getPosition()));
+      }
+    }
+
+    function updateFrom(latlng) {
+      reverseGeocode(latlng, (alamat) => {
+        if (alamat) document.getElementById("fromInput").value = alamat;
+        tryDirection();
+      });
+    }
+
+    function updateTo(latlng) {
+      reverseGeocode(latlng, (alamat) => {
+        if (alamat) document.getElementById("toInput").value = alamat;
+        tryDirection();
+      });
     }
 
     function reverseGeocode(latlng, callback) {
@@ -82,15 +153,72 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
       });
     }
 
-    function initMap() {
-      const regionParam = urlParams.get("region") || "sulut";
-      let boundsSulut;
-      if (regionParam === "sulut") {
-        boundsSulut = new google.maps.LatLngBounds(
-          new google.maps.LatLng(0.3, 123.5), // barat daya Sulut
-          new google.maps.LatLng(4.3, 126.0)  // timur laut Sulut
-        );
+    function tryDirection() {
+      if (!markerA || !markerB) return;
+      const from = markerA.getPosition();
+      const to = markerB.getPosition();
+
+      if (circleB) circleB.setMap(null);
+
+      directionsService.route({
+        origin: from,
+        destination: to,
+        travelMode: google.maps.TravelMode.DRIVING,
+        region: "ID"
+      }, (res, status) => {
+        if (status === "OK") {
+          directionsRenderer.setDirections(res);
+          const leg = res.routes[0].legs[0];
+
+          if (!fitBoundsOnce) {
+            map.fitBounds(res.routes[0].bounds);
+            fitBoundsOnce = true;
+          }
+
+          circleB = new google.maps.Circle({
+            center: to,
+            radius: 50,
+            map: map,
+            strokeColor: "#4285f4",
+            strokeOpacity: 0.5,
+            strokeWeight: 2,
+            fillColor: "#4285f4",
+            fillOpacity: 0.1
+          });
+
+          const hasil = {
+            jarak: leg.distance.text,
+            durasi: leg.duration.text,
+            alamat_a: document.getElementById("fromInput").value,
+            alamat_b: document.getElementById("toInput").value,
+            from_lat: from.lat(),
+            from_lng: from.lng(),
+            to_lat: to.lat(),
+            to_lng: to.lng()
+          };
+
+          if (window.AppInventor) {
+            window.AppInventor.setWebViewString(JSON.stringify(hasil));
+          }
+        }
+      });
+    }
+
+    function centerKeLokasi() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          map.setCenter(latlng);
+          map.setZoom(16);
+        });
       }
+    }
+
+    function initMap() {
+      const boundsSulut = new google.maps.LatLngBounds(
+        new google.maps.LatLng(0.3, 123.5),
+        new google.maps.LatLng(4.3, 126.0)
+      );
 
       map = new google.maps.Map(document.getElementById("map"), {
         center: order ? { lat: order[0], lng: order[1] } : { lat: -6.2, lng: 106.8 },
@@ -106,6 +234,7 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
         bounds: boundsSulut,
         strictBounds: true
       });
+
       const toAutocomplete = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
         componentRestrictions: { country: "ID" },
         bounds: boundsSulut,
@@ -123,8 +252,10 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
           position: place.geometry.location,
           map,
           draggable: true,
+          animation: google.maps.Animation.DROP,
           icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
+        markerA.addListener("dragend", () => updateFrom(markerA.getPosition()));
         tryDirection();
       });
 
@@ -135,78 +266,15 @@ setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
         markerB = new google.maps.Marker({
           position: place.geometry.location,
           map,
-          draggable: true
+          draggable: true,
+          animation: google.maps.Animation.DROP
         });
+        markerB.addListener("dragend", () => updateTo(markerB.getPosition()));
         tryDirection();
       });
-
-      map.addListener("click", (e) => {
-        if (!pinDropMode) return;
-        const latlng = e.latLng;
-
-        if (pinDropMode === 'from') {
-          if (markerA) markerA.setMap(null);
-          markerA = new google.maps.Marker({
-            position: latlng,
-            map,
-            draggable: true,
-            icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
-          });
-          reverseGeocode(latlng, (alamat) => {
-            if (alamat) document.getElementById("fromInput").value = alamat;
-            tryDirection();
-          });
-        } else if (pinDropMode === 'to') {
-          if (markerB) markerB.setMap(null);
-          markerB = new google.maps.Marker({
-            position: latlng,
-            map,
-            draggable: true
-          });
-          reverseGeocode(latlng, (alamat) => {
-            if (alamat) document.getElementById("toInput").value = alamat;
-            tryDirection();
-          });
-        }
-        pinDropMode = null;
-      });
     }
+  </script>
 
-    function tryDirection() {
-      if (!markerA || !markerB) return;
-
-      const from = markerA.getPosition();
-      const to = markerB.getPosition();
-
-      directionsService.route({
-        region: "ID",
-        origin: from,
-        destination: to,
-        travelMode: google.maps.TravelMode.DRIVING,
-      }, (res, status) => {
-        if (status === "OK") {
-          directionsRenderer.setDirections(res);
-          const leg = res.routes[0].legs[0];
-
-          const alamatA = document.getElementById("fromInput").value;
-          const alamatB = document.getElementById("toInput").value;
-
-          const hasil = {
-            jarak: leg.distance.text,
-            durasi: leg.duration.text,
-            alamat_a: alamatA,
-            alamat_b: alamatB,
-            from_lat: from.lat(),
-            from_lng: from.lng(),
-            to_lat: to.lat(),
-            to_lng: to.lng()
-          };
-
-          if (window.AppInventor) {
-            window.AppInventor.setWebViewString(JSON.stringify(hasil));
-          }
-        }
-      });
-    }
-  </script>  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script></body>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
+</body>
 </html>
