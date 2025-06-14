@@ -31,6 +31,43 @@
       font-size: 16px;
       box-sizing: border-box;
     }
+
+    /* Radar animation */
+    .radar {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 120px;
+      height: 120px;
+      background: rgba(0, 128, 255, 0.3);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse 1.5s infinite;
+      z-index: 999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .radar span {
+      color: white;
+      font-weight: bold;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: translate(-50%, -50%) scale(0.8);
+        opacity: 0.5;
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0.2;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(0.8);
+        opacity: 0.5;
+      }
+    }
   </style>
 </head>
 <body>
@@ -46,7 +83,8 @@
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
-    const hargaPerKm = parseFloat(urlParams.get("harga")) || 2300;
+    const toParam = urlParams.get("to");
+    const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;
 
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
@@ -99,22 +137,22 @@
             fillOpacity: 0.1
           });
 
-          const distanceInMeters = leg.distance.value;
-          const distanceInKm = distanceInMeters / 1000;
-          let totalHarga = distanceInKm * hargaPerKm;
-          totalHarga = Math.ceil(totalHarga / 500) * 500;
-          if (totalHarga < 10000) totalHarga = 10000;
+          let jarakKm = leg.distance.value / 1000;
+          let harga = Math.round(jarakKm * hargaPerKm);
+
+          if (harga < 10000) harga = 10000;
+          harga = Math.round(harga / 500) * 500;
 
           const hasil = {
             jarak: leg.distance.text,
             durasi: leg.duration.text,
+            harga: harga,
             alamat_a: document.getElementById("fromInput").value,
             alamat_b: document.getElementById("toInput").value,
             from_lat: from.lat(),
             from_lng: from.lng(),
             to_lat: to.lat(),
-            to_lng: to.lng(),
-            harga: "Rp " + totalHarga
+            to_lng: to.lng()
           };
 
           if (window.AppInventor) {
@@ -126,6 +164,8 @@
 
     function initMap() {
       const fromLatLng = getLatLng(fromParam) || { lat: -6.2, lng: 106.8 };
+      const toLatLng = getLatLng(toParam);
+
       map = new google.maps.Map(document.getElementById("map"), {
         center: fromLatLng,
         zoom: 14,
@@ -153,6 +193,25 @@
         reverseGeocode(fromLatLng, (alamat) => {
           if (alamat) document.getElementById("fromInput").value = alamat;
         });
+      }
+
+      if (toParam) {
+        markerB = new google.maps.Marker({
+          position: toLatLng,
+          map,
+          draggable: true,
+          animation: google.maps.Animation.DROP
+        });
+        markerB.addListener("dragend", () => {
+          reverseGeocode(markerB.getPosition(), (alamat) => {
+            if (alamat) document.getElementById("toInput").value = alamat;
+            tryDirection();
+          });
+        });
+        reverseGeocode(toLatLng, (alamat) => {
+          if (alamat) document.getElementById("toInput").value = alamat;
+        });
+        tryDirection();
       }
 
       const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
@@ -204,8 +263,21 @@
         tryDirection();
       });
     }
-  </script>
 
+    function tampilkanRadar() {
+      if (document.querySelector(".radar")) return;
+
+      const radar = document.createElement("div");
+      radar.className = "radar";
+      radar.innerHTML = "<span>Mencari Driver...</span>";
+      document.body.appendChild(radar);
+
+      setTimeout(() => {
+        radar.remove();
+        alert("Driver ditemukan!");
+      }, 5000);
+    }
+  </script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
