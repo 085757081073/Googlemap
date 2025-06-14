@@ -274,6 +274,12 @@
     
     }
   </script>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
+  
+  function kunciMarker() {
+    if (typeof markerA !== 'undefined' && markerA) markerA.setDraggable(false);
+    if (typeof markerB !== 'undefined' && markerB) markerB.setDraggable(false);
+  }
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
