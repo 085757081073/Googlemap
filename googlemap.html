@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -45,6 +46,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
+    const hargaPerKm = parseFloat(urlParams.get("harga")) || 2300;
 
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
@@ -97,6 +99,12 @@
             fillOpacity: 0.1
           });
 
+          const distanceInMeters = leg.distance.value;
+          const distanceInKm = distanceInMeters / 1000;
+          let totalHarga = distanceInKm * hargaPerKm;
+          totalHarga = Math.ceil(totalHarga / 500) * 500;
+          if (totalHarga < 10000) totalHarga = 10000;
+
           const hasil = {
             jarak: leg.distance.text,
             durasi: leg.duration.text,
@@ -105,7 +113,8 @@
             from_lat: from.lat(),
             from_lng: from.lng(),
             to_lat: to.lat(),
-            to_lng: to.lng()
+            to_lng: to.lng(),
+            harga: "Rp " + totalHarga
           };
 
           if (window.AppInventor) {
@@ -127,7 +136,6 @@
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      // Titik awal otomatis dari URL
       if (fromParam) {
         markerA = new google.maps.Marker({
           position: fromLatLng,
@@ -147,7 +155,6 @@
         });
       }
 
-      // Autocomplete aktif Titik Awal
       const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
         componentRestrictions: { country: "ID" },
         strictBounds: false
@@ -173,7 +180,6 @@
         tryDirection();
       });
 
-      // Autocomplete aktif Titik Tujuan
       const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
         componentRestrictions: { country: "ID" },
         strictBounds: false
