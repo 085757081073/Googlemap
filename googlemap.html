@@ -34,7 +34,7 @@
 </head>
 <body>
   <div class="panel">
-    <input id="fromInput" type="text" placeholder="Titik Awal (otomatis dari URL)" />
+    <input id="fromInput" type="text" placeholder="Titik Awal" />
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
   </div>
   <div id="map"></div>
@@ -45,6 +45,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
+
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
       mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
@@ -115,9 +116,9 @@
     }
 
     function initMap() {
-      const defaultCenter = getLatLng(fromParam) || { lat: -6.2, lng: 106.8 };
+      const fromLatLng = getLatLng(fromParam) || { lat: -6.2, lng: 106.8 };
       map = new google.maps.Map(document.getElementById("map"), {
-        center: defaultCenter,
+        center: fromLatLng,
         zoom: 14,
         disableDefaultUI: true
       });
@@ -126,9 +127,10 @@
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
+      // Titik awal otomatis dari URL
       if (fromParam) {
         markerA = new google.maps.Marker({
-          position: defaultCenter,
+          position: fromLatLng,
           map,
           draggable: true,
           animation: google.maps.Animation.DROP,
@@ -140,11 +142,38 @@
             tryDirection();
           });
         });
-        reverseGeocode(defaultCenter, (alamat) => {
+        reverseGeocode(fromLatLng, (alamat) => {
           if (alamat) document.getElementById("fromInput").value = alamat;
         });
       }
 
+      // Autocomplete aktif Titik Awal
+      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
+        componentRestrictions: { country: "ID" },
+        strictBounds: false
+      });
+      fromAC.setFields(["geometry"]);
+      fromAC.addListener("place_changed", () => {
+        const place = fromAC.getPlace();
+        if (!place.geometry) return;
+        if (markerA) markerA.setMap(null);
+        markerA = new google.maps.Marker({
+          position: place.geometry.location,
+          map,
+          draggable: true,
+          animation: google.maps.Animation.DROP,
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+        });
+        markerA.addListener("dragend", () => {
+          reverseGeocode(markerA.getPosition(), (alamat) => {
+            if (alamat) document.getElementById("fromInput").value = alamat;
+            tryDirection();
+          });
+        });
+        tryDirection();
+      });
+
+      // Autocomplete aktif Titik Tujuan
       const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
         componentRestrictions: { country: "ID" },
         strictBounds: false
