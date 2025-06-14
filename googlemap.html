@@ -273,6 +273,12 @@
       document.body.appendChild(radar);
     
     }
+    
+    function sembunyikanRadar() {
+  const radar = document.querySelector(".radar");
+  if (radar) radar.remove();
+}
+
   </script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
 </body>
