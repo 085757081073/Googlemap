@@ -267,19 +267,13 @@
     function tampilkanRadar() {
       if (document.querySelector(".radar")) return;
 
-      const radar = document.createElement("div");
+      const<script src="https://maps.googleapis.com/maps/api/js?..."> radar = document.createElement("div");
       radar.className = "radar";
       radar.innerHTML = "<span>Mencari Driver...</span>";
       document.body.appendChild(radar);
     
     }
   </script>
-  
-  function kunciMarker() {
-    if (typeof markerA !== 'undefined' && markerA) markerA.setDraggable(false);
-    if (typeof markerB !== 'undefined' && markerB) markerB.setDraggable(false);
-  }
-
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
