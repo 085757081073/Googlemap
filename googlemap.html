@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Pilih Lokasi Ojek</title>
+  <title>Rute Ojek</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     html, body, #map {
@@ -14,7 +14,7 @@
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.9);
       padding: 10px;
       z-index: 5;
       border-radius: 8px;
@@ -23,68 +23,39 @@
       max-width: 100%;
       box-sizing: border-box;
     }
-    input, button {
+    input {
       width: 100%;
-      box-sizing: border-box;
       margin-bottom: 8px;
       padding: 10px;
       font-size: 16px;
-    }
-    button {
-      background: #4285f4;
-      color: white;
-      border: none;
-      border-radius: 6px;
-    }
-    .pin-btn {
-      background: #fbbc04;
-      color: black;
-    }
-    #lokasiSayaBtn {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 5;
-      padding: 10px;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 14px;
+      box-sizing: border-box;
     }
   </style>
 </head>
 <body>
   <div class="panel">
-    <input id="fromInput" type="text" placeholder="Titik Awal" onclick="showPinButton('from')" />
-    <button id="fromPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('from')">Cari di Peta</button>
-
-    <input id="toInput" type="text" placeholder="Titik Tujuan" onclick="showPinButton('to')" />
-    <button id="toPinBtn" class="pin-btn" style="display:none;" onclick="enablePinDrop('to')">Cari di Peta</button>
+    <input id="fromInput" type="text" placeholder="Titik Awal (otomatis dari URL)" />
+    <input id="toInput" type="text" placeholder="Titik Tujuan" />
   </div>
   <div id="map"></div>
-  <button id="lokasiSayaBtn" onclick="centerKeLokasi()">📍 Lokasi Saya</button>
 
   <script>
     let map, directionsService, directionsRenderer;
-    let markerA, markerB, circleB, lokasiMarkerSaya;
-    let fitBoundsOnce = false;
-
+    let markerA, markerB, circleB;
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
-    const orderParam = urlParams.get("order");
-    const order = orderParam ? orderParam.split(',').map(Number) : null;
-
+    const fromParam = urlParams.get("from");
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
       mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
       kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png'
     };
 
-    function showPinButton(type) {
-      document.getElementById("fromPinBtn").style.display = (type === 'from') ? "block" : "none";
-      document.getElementById("toPinBtn").style.display = (type === 'to') ? "block" : "none";
-    }
+    const getLatLng = (val) => {
+      if (!val) return null;
+      const parts = val.split(',').map(Number);
+      return parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) ? { lat: parts[0], lng: parts[1] } : null;
+    };
 
     function reverseGeocode(latlng, callback) {
       const geocoder = new google.maps.Geocoder();
@@ -113,11 +84,6 @@
         if (status === "OK") {
           directionsRenderer.setDirections(res);
           const leg = res.routes[0].legs[0];
-
-          if (!fitBoundsOnce) {
-            map.fitBounds(res.routes[0].bounds);
-            fitBoundsOnce = true;
-          }
 
           circleB = new google.maps.Circle({
             center: to,
@@ -148,49 +114,10 @@
       });
     }
 
-    function centerKeLokasi() {
-      const infoBox = document.createElement("div");
-      infoBox.textContent = "Mendeteksi lokasi...";
-      infoBox.style.position = "absolute";
-      infoBox.style.top = "50%";
-      infoBox.style.left = "50%";
-      infoBox.style.transform = "translate(-50%, -50%)";
-      infoBox.style.padding = "10px 20px";
-      infoBox.style.background = "rgba(0,0,0,0.7)";
-      infoBox.style.color = "#fff";
-      infoBox.style.borderRadius = "8px";
-      infoBox.style.zIndex = "9999";
-      document.body.appendChild(infoBox);
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          document.body.removeChild(infoBox);
-          const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          map.panTo(latlng);
-          map.setZoom(17);
-
-          if (lokasiMarkerSaya) lokasiMarkerSaya.setMap(null);
-          lokasiMarkerSaya = new google.maps.Marker({
-            position: latlng,
-            map,
-            animation: google.maps.Animation.DROP,
-            icon: {
-              url: 'https://cdn-icons-png.flaticon.com/128/484/484167.png',
-              scaledSize: new google.maps.Size(32, 32)
-            }
-          });
-        });
-      }
-    }
-
     function initMap() {
-      const boundsSulut = new google.maps.LatLngBounds(
-        new google.maps.LatLng(0.3, 123.5),
-        new google.maps.LatLng(4.3, 126.0)
-      );
-
+      const defaultCenter = getLatLng(fromParam) || { lat: -6.2, lng: 106.8 };
       map = new google.maps.Map(document.getElementById("map"), {
-        center: order ? { lat: order[0], lng: order[1] } : { lat: -6.2, lng: 106.8 },
+        center: defaultCenter,
         zoom: 14,
         disableDefaultUI: true
       });
@@ -199,42 +126,9 @@
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      // 📍 AUTO DETEKSI TITIK AWAL
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          map.setCenter(latlng);
-          markerA = new google.maps.Marker({
-            position: latlng,
-            map,
-            draggable: true,
-            animation: google.maps.Animation.DROP,
-            icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
-          });
-          markerA.addListener("dragend", () => {
-            reverseGeocode(markerA.getPosition(), (alamat) => {
-              if (alamat) document.getElementById("fromInput").value = alamat;
-              tryDirection();
-            });
-          });
-          reverseGeocode(latlng, (alamat) => {
-            if (alamat) document.getElementById("fromInput").value = alamat;
-          });
-        });
-      }
-
-      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
-        componentRestrictions: { country: "ID" },
-        bounds: boundsSulut,
-        strictBounds: true
-      });
-      fromAC.setFields(["geometry"]);
-      fromAC.addListener("place_changed", () => {
-        const place = fromAC.getPlace();
-        if (!place.geometry) return;
-        if (markerA) markerA.setMap(null);
+      if (fromParam) {
         markerA = new google.maps.Marker({
-          position: place.geometry.location,
+          position: defaultCenter,
           map,
           draggable: true,
           animation: google.maps.Animation.DROP,
@@ -246,13 +140,14 @@
             tryDirection();
           });
         });
-        tryDirection();
-      });
+        reverseGeocode(defaultCenter, (alamat) => {
+          if (alamat) document.getElementById("fromInput").value = alamat;
+        });
+      }
 
       const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
         componentRestrictions: { country: "ID" },
-        bounds: boundsSulut,
-        strictBounds: true
+        strictBounds: false
       });
       toAC.setFields(["geometry"]);
       toAC.addListener("place_changed", () => {
