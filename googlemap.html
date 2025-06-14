@@ -25,7 +25,6 @@
     }
     input, button {
       width: 100%;
-      max-width: 100%;
       box-sizing: border-box;
       margin-bottom: 8px;
       padding: 10px;
@@ -44,7 +43,8 @@
     #lokasiSayaBtn {
       position: absolute;
       bottom: 20px;
-      right: 20px;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 5;
       padding: 10px;
       background: white;
@@ -67,8 +67,7 @@
 
   <script>
     let map, directionsService, directionsRenderer;
-    let markerA, markerB, circleB;
-    let pinDropMode = null;
+    let markerA, markerB, circleB, lokasiMarkerSaya;
     let fitBoundsOnce = false;
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -85,61 +84,6 @@
     function showPinButton(type) {
       document.getElementById("fromPinBtn").style.display = (type === 'from') ? "block" : "none";
       document.getElementById("toPinBtn").style.display = (type === 'to') ? "block" : "none";
-    }
-
-    function enablePinDrop(type) {
-      pinDropMode = type;
-      const infoBox = document.createElement("div");
-      infoBox.textContent = "Silakan geser marker untuk memilih titik " + (type === 'from' ? 'awal' : 'tujuan');
-      infoBox.style.position = "absolute";
-      infoBox.style.top = "50%";
-      infoBox.style.left = "50%";
-      infoBox.style.transform = "translate(-50%, -50%)";
-      infoBox.style.padding = "10px 20px";
-      infoBox.style.background = "rgba(0,0,0,0.7)";
-      infoBox.style.color = "#fff";
-      infoBox.style.borderRadius = "8px";
-      infoBox.style.zIndex = "9999";
-      document.body.appendChild(infoBox);
-      setTimeout(() => { document.body.removeChild(infoBox); }, 3000);
-
-      const center = map.getCenter();
-      if (type === 'from') {
-        if (markerA) markerA.setMap(null);
-        markerA = new google.maps.Marker({
-          position: center,
-          map,
-          draggable: true,
-          animation: google.maps.Animation.DROP,
-          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
-        });
-        updateFrom(markerA.getPosition());
-        markerA.addListener("dragend", () => updateFrom(markerA.getPosition()));
-      } else if (type === 'to') {
-        if (markerB) markerB.setMap(null);
-        markerB = new google.maps.Marker({
-          position: center,
-          map,
-          draggable: true,
-          animation: google.maps.Animation.DROP
-        });
-        updateTo(markerB.getPosition());
-        markerB.addListener("dragend", () => updateTo(markerB.getPosition()));
-      }
-    }
-
-    function updateFrom(latlng) {
-      reverseGeocode(latlng, (alamat) => {
-        if (alamat) document.getElementById("fromInput").value = alamat;
-        tryDirection();
-      });
-    }
-
-    function updateTo(latlng) {
-      reverseGeocode(latlng, (alamat) => {
-        if (alamat) document.getElementById("toInput").value = alamat;
-        tryDirection();
-      });
     }
 
     function reverseGeocode(latlng, callback) {
@@ -205,11 +149,36 @@
     }
 
     function centerKeLokasi() {
+      const infoBox = document.createElement("div");
+      infoBox.textContent = "Mendeteksi lokasi...";
+      infoBox.style.position = "absolute";
+      infoBox.style.top = "50%";
+      infoBox.style.left = "50%";
+      infoBox.style.transform = "translate(-50%, -50%)";
+      infoBox.style.padding = "10px 20px";
+      infoBox.style.background = "rgba(0,0,0,0.7)";
+      infoBox.style.color = "#fff";
+      infoBox.style.borderRadius = "8px";
+      infoBox.style.zIndex = "9999";
+      document.body.appendChild(infoBox);
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((pos) => {
+          document.body.removeChild(infoBox);
           const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          map.setCenter(latlng);
-          map.setZoom(16);
+          map.panTo(latlng);
+          map.setZoom(17);
+
+          if (lokasiMarkerSaya) lokasiMarkerSaya.setMap(null);
+          lokasiMarkerSaya = new google.maps.Marker({
+            position: latlng,
+            map,
+            animation: google.maps.Animation.DROP,
+            icon: {
+              url: 'https://cdn-icons-png.flaticon.com/128/484/484167.png',
+              scaledSize: new google.maps.Size(32, 32)
+            }
+          });
         });
       }
     }
@@ -222,30 +191,46 @@
 
       map = new google.maps.Map(document.getElementById("map"), {
         center: order ? { lat: order[0], lng: order[1] } : { lat: -6.2, lng: 106.8 },
-        zoom: 14
+        zoom: 14,
+        disableDefaultUI: true
       });
 
       directionsService = new google.maps.DirectionsService();
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      const fromAutocomplete = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
+      // 📍 AUTO DETEKSI TITIK AWAL
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          map.setCenter(latlng);
+          markerA = new google.maps.Marker({
+            position: latlng,
+            map,
+            draggable: true,
+            animation: google.maps.Animation.DROP,
+            icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+          });
+          markerA.addListener("dragend", () => {
+            reverseGeocode(markerA.getPosition(), (alamat) => {
+              if (alamat) document.getElementById("fromInput").value = alamat;
+              tryDirection();
+            });
+          });
+          reverseGeocode(latlng, (alamat) => {
+            if (alamat) document.getElementById("fromInput").value = alamat;
+          });
+        });
+      }
+
+      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
         componentRestrictions: { country: "ID" },
         bounds: boundsSulut,
         strictBounds: true
       });
-
-      const toAutocomplete = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
-        componentRestrictions: { country: "ID" },
-        bounds: boundsSulut,
-        strictBounds: true
-      });
-
-      fromAutocomplete.setFields(["geometry"]);
-      toAutocomplete.setFields(["geometry"]);
-
-      fromAutocomplete.addListener("place_changed", () => {
-        const place = fromAutocomplete.getPlace();
+      fromAC.setFields(["geometry"]);
+      fromAC.addListener("place_changed", () => {
+        const place = fromAC.getPlace();
         if (!place.geometry) return;
         if (markerA) markerA.setMap(null);
         markerA = new google.maps.Marker({
@@ -255,12 +240,23 @@
           animation: google.maps.Animation.DROP,
           icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
-        markerA.addListener("dragend", () => updateFrom(markerA.getPosition()));
+        markerA.addListener("dragend", () => {
+          reverseGeocode(markerA.getPosition(), (alamat) => {
+            if (alamat) document.getElementById("fromInput").value = alamat;
+            tryDirection();
+          });
+        });
         tryDirection();
       });
 
-      toAutocomplete.addListener("place_changed", () => {
-        const place = toAutocomplete.getPlace();
+      const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
+        componentRestrictions: { country: "ID" },
+        bounds: boundsSulut,
+        strictBounds: true
+      });
+      toAC.setFields(["geometry"]);
+      toAC.addListener("place_changed", () => {
+        const place = toAC.getPlace();
         if (!place.geometry) return;
         if (markerB) markerB.setMap(null);
         markerB = new google.maps.Marker({
@@ -269,7 +265,12 @@
           draggable: true,
           animation: google.maps.Animation.DROP
         });
-        markerB.addListener("dragend", () => updateTo(markerB.getPosition()));
+        markerB.addListener("dragend", () => {
+          reverseGeocode(markerB.getPosition(), (alamat) => {
+            if (alamat) document.getElementById("toInput").value = alamat;
+            tryDirection();
+          });
+        });
         tryDirection();
       });
     }
