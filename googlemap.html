@@ -1,5 +1,3 @@
-ipt>  </body>  
-</html>  
 <!DOCTYPE html>
 <html>
 <head>
@@ -32,30 +30,6 @@ ipt>  </body>
       font-size: 16px;
       box-sizing: border-box;
     }
-    .radar {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 240px;
-      height: 240px;
-      background: rgba(255, 0, 0, 0.3);
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      animation: pulse 1.5s infinite;
-      z-index: 999;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .radar span {
-      color: white;
-      font-weight: bold;
-    }
-    @keyframes pulse {
-      0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
-      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.2; }
-      100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
-    }
   </style>
 </head>
 <body>
@@ -66,7 +40,7 @@ ipt>  </body>
   <div id="map"></div>
   <script>
     let map, directionsService, directionsRenderer;
-    let markerA, markerB, circleB;
+    let markerA, markerB;
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
@@ -103,29 +77,22 @@ ipt>  </body>
       const to = markerB.getPosition();
       const isMotor = vehicle === "motor";
 
-      if (circleB) circleB.setMap(null);
-
       directionsService.route({
         origin: from,
         destination: to,
         travelMode: google.maps.TravelMode.DRIVING,
         region: "ID",
-        avoidTolls: isMotor // Motor hindari tol
+        avoidTolls: isMotor,
+        departureTime: new Date(),
+        trafficModel: "best_guess"
       }, (res, status) => {
         if (status === "OK") {
           directionsRenderer.setDirections(res);
-          const leg = res.routes[0].legs[0];
-
-          circleB = new google.maps.Circle({
-            center: to,
-            radius: 50,
-            map: map,
-            strokeColor: "#4285f4",
-            strokeOpacity: 0.5,
-            strokeWeight: 2,
-            fillColor: "#4285f4",
-            fillOpacity: 0.1
-          });
+          const route = res.routes[0];
+          const leg = route.legs[0];
+          const durationTraffic = leg.duration_in_traffic
+            ? leg.duration_in_traffic.text
+            : leg.duration.text;
 
           let jarakKm = leg.distance.value / 1000;
           let harga = Math.round(jarakKm * hargaPerKm);
@@ -135,6 +102,7 @@ ipt>  </body>
           const hasil = {
             jarak: leg.distance.text,
             durasi: leg.duration.text,
+            durasi_traffic: durationTraffic,
             harga: harga,
             alamat_a: document.getElementById("fromInput").value,
             alamat_b: document.getElementById("toInput").value,
@@ -170,7 +138,6 @@ ipt>  </body>
           position: fromLatLng,
           map,
           draggable: true,
-          animation: google.maps.Animation.DROP,
           icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
         markerA.addListener("dragend", () => {
@@ -188,8 +155,7 @@ ipt>  </body>
         markerB = new google.maps.Marker({
           position: toLatLng,
           map,
-          draggable: true,
-          animation: google.maps.Animation.DROP
+          draggable: true
         });
         markerB.addListener("dragend", () => {
           reverseGeocode(markerB.getPosition(), (alamat) => {
@@ -202,68 +168,6 @@ ipt>  </body>
         });
         tryDirection();
       }
-
-      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
-        componentRestrictions: { country: "ID" },
-        strictBounds: false
-      });
-      fromAC.setFields(["geometry"]);
-      fromAC.addListener("place_changed", () => {
-        const place = fromAC.getPlace();
-        if (!place.geometry) return;
-        if (markerA) markerA.setMap(null);
-        markerA = new google.maps.Marker({
-          position: place.geometry.location,
-          map,
-          draggable: true,
-          animation: google.maps.Animation.DROP,
-          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
-        });
-        markerA.addListener("dragend", () => {
-          reverseGeocode(markerA.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("fromInput").value = alamat;
-            tryDirection();
-          });
-        });
-        tryDirection();
-      });
-
-      const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
-        componentRestrictions: { country: "ID" },
-        strictBounds: false
-      });
-      toAC.setFields(["geometry"]);
-      toAC.addListener("place_changed", () => {
-        const place = toAC.getPlace();
-        if (!place.geometry) return;
-        if (markerB) markerB.setMap(null);
-        markerB = new google.maps.Marker({
-          position: place.geometry.location,
-          map,
-          draggable: true,
-          animation: google.maps.Animation.DROP
-        });
-        markerB.addListener("dragend", () => {
-          reverseGeocode(markerB.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("toInput").value = alamat;
-            tryDirection();
-          });
-        });
-        tryDirection();
-      });
-    }
-
-    function tampilkanRadar() {
-      if (document.querySelector(".radar")) return;
-      const radar = document.createElement("div");
-      radar.className = "radar";
-      radar.innerHTML = "<span>Mencari Driver...</span>";
-      document.body.appendChild(radar);
-    }
-
-    function sembunyikanRadar() {
-      const radar = document.querySelector(".radar");
-      if (radar) radar.remove();
     }
   </script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
