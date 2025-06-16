@@ -38,36 +38,57 @@
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
   </div>
   <div id="map"></div>
+
   <script>
     let map, directionsService, directionsRenderer;
-    let markerA, markerB;
-    const urlParams = new URLSearchParams(window.location.search);
-    const vehicle = urlParams.get("vehicle") || "motor";
-    const fromParam = urlParams.get("from");
-    const toParam = urlParams.get("to");
-    const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;
+    let markerA = null, markerB = null;
+    const hargaPerKm = 2300;
+    const vehicle = "motor"; // opsional
 
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
-      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
-      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
-      bentor: 'https://cdn-icons-png.flaticon.com/128/7890/7890227.png'
+      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png'
     };
 
-    const getLatLng = (val) => {
-      if (!val) return null;
-      const parts = val.split(',').map(Number);
-      return parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) ? { lat: parts[0], lng: parts[1] } : null;
-    };
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: -1.5, lng: 124.8 },
+        zoom: 14,
+        disableDefaultUI: false
+      });
 
-    function reverseGeocode(latlng, callback) {
-      const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({ location: latlng }, (results, status) => {
-        if (status === 'OK' && results[0]) {
-          callback(results[0].formatted_address);
-        } else {
-          callback(null);
-        }
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
+      directionsRenderer.setMap(map);
+
+      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"));
+      const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"));
+
+      fromAC.addListener("place_changed", () => {
+        const place = fromAC.getPlace();
+        if (!place.geometry) return;
+        if (markerA) markerA.setMap(null);
+        markerA = new google.maps.Marker({
+          position: place.geometry.location,
+          map,
+          draggable: true,
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+        });
+        markerA.addListener("dragend", tryDirection);
+        tryDirection();
+      });
+
+      toAC.addListener("place_changed", () => {
+        const place = toAC.getPlace();
+        if (!place.geometry) return;
+        if (markerB) markerB.setMap(null);
+        markerB = new google.maps.Marker({
+          position: place.geometry.location,
+          map,
+          draggable: true
+        });
+        markerB.addListener("dragend", tryDirection);
+        tryDirection();
       });
     }
 
@@ -76,21 +97,19 @@
 
       const from = markerA.getPosition();
       const to = markerB.getPosition();
-      const isMotor = vehicle === "motor";
 
       directionsService.route({
         origin: from,
         destination: to,
         travelMode: google.maps.TravelMode.DRIVING,
         region: "ID",
-        avoidTolls: isMotor,
+        avoidTolls: vehicle === "motor",
         departureTime: new Date(),
         trafficModel: "best_guess"
       }, (res, status) => {
         if (status === "OK" && res.routes.length > 0) {
           directionsRenderer.setDirections(res);
-          const route = res.routes[0];
-          const leg = route.legs[0];
+          const leg = res.routes[0].legs[0];
           const durationTraffic = leg.duration_in_traffic
             ? leg.duration_in_traffic.text
             : leg.duration.text;
@@ -116,100 +135,15 @@
           if (window.AppInventor) {
             window.AppInventor.setWebViewString(JSON.stringify(hasil));
           } else {
-            console.log("WebViewString:", hasil);
+            console.log("WebViewString (debug):", JSON.stringify(hasil));
           }
         } else {
-          console.warn("Rute tidak ditemukan:", status);
+          console.warn("Gagal ambil rute:", status);
         }
       });
     }
-
-    function initMap() {
-      const fromLatLng = getLatLng(fromParam) || { lat: -6.2, lng: 106.8 };
-      const toLatLng = getLatLng(toParam);
-
-      map = new google.maps.Map(document.getElementById("map"), {
-        center: fromLatLng,
-        zoom: 14,
-        disableDefaultUI: true
-      });
-
-      directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
-      directionsRenderer.setMap(map);
-
-      if (fromLatLng) {
-        markerA = new google.maps.Marker({
-          position: fromLatLng,
-          map,
-          draggable: true,
-          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
-        });
-        markerA.addListener("dragend", () => {
-          reverseGeocode(markerA.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("fromInput").value = alamat;
-            tryDirection();
-          });
-        });
-        reverseGeocode(fromLatLng, (alamat) => {
-          if (alamat) document.getElementById("fromInput").value = alamat;
-        });
-      }
-
-      if (toLatLng) {
-        markerB = new google.maps.Marker({
-          position: toLatLng,
-          map,
-          draggable: true
-        });
-        markerB.addListener("dragend", () => {
-          reverseGeocode(markerB.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("toInput").value = alamat;
-            tryDirection();
-          });
-        });
-        reverseGeocode(toLatLng, (alamat) => {
-          if (alamat) document.getElementById("toInput").value = alamat;
-        });
-        tryDirection();
-      }
-
-      // Autocomplete From
-      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
-        componentRestrictions: { country: "ID" }
-      });
-      fromAC.setFields(["geometry"]);
-      fromAC.addListener("place_changed", () => {
-        const place = fromAC.getPlace();
-        if (!place.geometry) return;
-        if (markerA) markerA.setMap(null);
-        markerA = new google.maps.Marker({
-          position: place.geometry.location,
-          map,
-          draggable: true,
-          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
-        });
-        tryDirection();
-      });
-
-      // Autocomplete To
-      const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
-        componentRestrictions: { country: "ID" }
-      });
-      toAC.setFields(["geometry"]);
-      toAC.addListener("place_changed", () => {
-        const place = toAC.getPlace();
-        if (!place.geometry) return;
-        if (markerB) markerB.setMap(null);
-        markerB = new google.maps.Marker({
-          position: place.geometry.location,
-          map,
-          draggable: true
-        });
-        tryDirection();
-      });
-    }
   </script>
+
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
