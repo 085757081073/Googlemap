@@ -168,6 +168,40 @@
         });
         tryDirection();
       }
+
+      // ✅ Tambahkan autocomplete
+      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
+        componentRestrictions: { country: "ID" }
+      });
+      fromAC.setFields(["geometry"]);
+      fromAC.addListener("place_changed", () => {
+        const place = fromAC.getPlace();
+        if (!place.geometry) return;
+        if (markerA) markerA.setMap(null);
+        markerA = new google.maps.Marker({
+          position: place.geometry.location,
+          map,
+          draggable: true,
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+        });
+        tryDirection();
+      });
+
+      const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
+        componentRestrictions: { country: "ID" }
+      });
+      toAC.setFields(["geometry"]);
+      toAC.addListener("place_changed", () => {
+        const place = toAC.getPlace();
+        if (!place.geometry) return;
+        if (markerB) markerB.setMap(null);
+        markerB = new google.maps.Marker({
+          position: place.geometry.location,
+          map,
+          draggable: true
+        });
+        tryDirection();
+      });
     }
   </script>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap" async defer></script>
