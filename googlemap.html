@@ -73,6 +73,7 @@
 
     function tryDirection() {
       if (!markerA || !markerB) return;
+
       const from = markerA.getPosition();
       const to = markerB.getPosition();
       const isMotor = vehicle === "motor";
@@ -86,7 +87,7 @@
         departureTime: new Date(),
         trafficModel: "best_guess"
       }, (res, status) => {
-        if (status === "OK") {
+        if (status === "OK" && res.routes.length > 0) {
           directionsRenderer.setDirections(res);
           const route = res.routes[0];
           const leg = route.legs[0];
@@ -114,7 +115,11 @@
 
           if (window.AppInventor) {
             window.AppInventor.setWebViewString(JSON.stringify(hasil));
+          } else {
+            console.log("WebViewString:", hasil);
           }
+        } else {
+          console.warn("Rute tidak ditemukan:", status);
         }
       });
     }
@@ -133,7 +138,7 @@
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      if (fromParam) {
+      if (fromLatLng) {
         markerA = new google.maps.Marker({
           position: fromLatLng,
           map,
@@ -151,7 +156,7 @@
         });
       }
 
-      if (toParam) {
+      if (toLatLng) {
         markerB = new google.maps.Marker({
           position: toLatLng,
           map,
@@ -169,7 +174,7 @@
         tryDirection();
       }
 
-      // ✅ Tambahkan autocomplete
+      // Autocomplete From
       const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
         componentRestrictions: { country: "ID" }
       });
@@ -187,6 +192,7 @@
         tryDirection();
       });
 
+      // Autocomplete To
       const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
         componentRestrictions: { country: "ID" }
       });
