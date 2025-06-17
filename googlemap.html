@@ -5,91 +5,85 @@
   <title>Rute Ojek</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    html, body, #map {
+    html, body {
       height: 100%;
       margin: 0;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: sans-serif;
     }
-    .panel {
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: white;
-      padding: 15px;
-      z-index: 10;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      width: 92%;
-      max-width: 600px;
-    }
-    .panel input {
-      width: 100%;
-      padding: 10px;
-      font-size: 16px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-    }
-    .btn-pesan {
-      background: #00b14f;
-      color: white;
-      border: none;
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
-      display: none;
-    }
-    .btn-pesan:active {
-      background: #009b44;
-    }
-    .radar {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 240px;
-      height: 240px;
-      background: rgba(0, 184, 82, 0.25);
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      animation: pulse 1.5s infinite;
-      z-index: 999;
+
+    .container {
       display: flex;
-      justify-content: center;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    #map {
+      flex: 1;
+    }
+
+    .vehicle-select {
+      background: #f8f8f8;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .vehicle-select label {
+      margin: 0 10px;
+      font-size: 15px;
+    }
+
+    .footer {
+      background: #ffffff;
+      border-top: 1px solid #ccc;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
       align-items: center;
     }
-    .radar span {
-      color: #00652d;
+
+    #price {
+      font-size: 18px;
       font-weight: bold;
+      color: #333;
     }
-    @keyframes pulse {
-      0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.4; }
-      50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.1; }
-      100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.4; }
+
+    #orderBtn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <div class="panel">
-    <input id="fromInput" type="text" placeholder="Titik Awal" />
-    <input id="toInput" type="text" placeholder="Titik Tujuan" />
-    <button class="btn-pesan" onclick="tampilkanRadar()">Pesan Sekarang</button>
-  </div>
-  <div id="map"></div>
+  <div class="container">
+    <div id="map"></div>
 
-  <!-- script logika tetap -->
+    <div class="vehicle-select">
+      <label><input type="radio" name="vehicle" value="motor" checked /> Motor</label>
+      <label><input type="radio" name="vehicle" value="mobil" /> Mobil</label>
+      <label><input type="radio" name="vehicle" value="kurir" /> Kurir</label>
+      <label><input type="radio" name="vehicle" value="bentor" /> Bentor</label>
+    </div>
+
+    <div class="footer">
+      <div id="price">Rp 0</div>
+      <button id="orderBtn" onclick="kirimWebview()">Pesan Sekarang</button>
+    </div>
+  </div>
+
   <script>
     let map, directionsService, directionsRenderer;
     let markerA, markerB, circleB;
+    let vehicle = "motor";
+    let hargaPerKm = 2500;
     const urlParams = new URLSearchParams(window.location.search);
-    const vehicle = urlParams.get("vehicle") || "motor";
+    const keyParam = urlParams.get("key");
     const fromParam = urlParams.get("from");
     const toParam = urlParams.get("to");
-    const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;
+    if (urlParams.get("harga")) hargaPerKm = parseFloat(urlParams.get("harga"));
 
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
@@ -107,11 +101,8 @@
     function reverseGeocode(latlng, callback) {
       const geocoder = new google.maps.Geocoder();
       geocoder.geocode({ location: latlng }, (results, status) => {
-        if (status === 'OK' && results[0]) {
-          callback(results[0].formatted_address);
-        } else {
-          callback(null);
-        }
+        if (status === 'OK' && results[0]) callback(results[0].formatted_address);
+        else callback(null);
       });
     }
 
@@ -119,7 +110,6 @@
       if (!markerA || !markerB) return;
       const from = markerA.getPosition();
       const to = markerB.getPosition();
-      const isMotor = vehicle === "motor";
 
       if (circleB) circleB.setMap(null);
 
@@ -128,12 +118,11 @@
         destination: to,
         travelMode: google.maps.TravelMode.DRIVING,
         region: "ID",
-        avoidTolls: isMotor
+        avoidTolls: vehicle === "motor"
       }, (res, status) => {
         if (status === "OK") {
           directionsRenderer.setDirections(res);
           const leg = res.routes[0].legs[0];
-          const durasiTraffic = leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text;
 
           circleB = new google.maps.Circle({
             center: to,
@@ -154,22 +143,16 @@
           const hasil = {
             jarak: leg.distance.text,
             durasi: leg.duration.text,
-            durasi_traffic: durasiTraffic,
             harga: harga,
-            alamat_a: document.getElementById("fromInput").value,
-            alamat_b: document.getElementById("toInput").value,
             from_lat: from.lat(),
             from_lng: from.lng(),
             to_lat: to.lat(),
-            to_lng: to.lng()
+            to_lng: to.lng(),
+            kendaraan: vehicle
           };
 
-          // ✅ Tampilkan tombol "Pesan Sekarang"
-          document.querySelector('.btn-pesan').style.display = 'block';
-
-          if (window.AppInventor) {
-            window.AppInventor.setWebViewString(JSON.stringify(hasil));
-          }
+          window.latestResult = hasil;
+          document.getElementById("price").innerText = "Rp " + harga.toLocaleString();
         }
       });
     }
@@ -188,7 +171,7 @@
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      if (fromParam) {
+      if (fromLatLng) {
         markerA = new google.maps.Marker({
           position: fromLatLng,
           map,
@@ -196,109 +179,46 @@
           animation: google.maps.Animation.DROP,
           icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
-        markerA.addListener("dragend", () => {
-          reverseGeocode(markerA.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("fromInput").value = alamat;
-            tryDirection();
-          });
-        });
-        reverseGeocode(fromLatLng, (alamat) => {
-          if (alamat) document.getElementById("fromInput").value = alamat;
-        });
+        markerA.addListener("dragend", tryDirection);
       }
 
-      if (toParam) {
+      if (toLatLng) {
         markerB = new google.maps.Marker({
           position: toLatLng,
           map,
           draggable: true,
           animation: google.maps.Animation.DROP
         });
-        markerB.addListener("dragend", () => {
-          reverseGeocode(markerB.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("toInput").value = alamat;
-            tryDirection();
-          });
-        });
-        reverseGeocode(toLatLng, (alamat) => {
-          if (alamat) document.getElementById("toInput").value = alamat;
-        });
+        markerB.addListener("dragend", tryDirection);
         tryDirection();
       }
 
-      const fromAC = new google.maps.places.Autocomplete(document.getElementById("fromInput"), {
-        componentRestrictions: { country: "ID" },
-        strictBounds: false
-      });
-      fromAC.setFields(["geometry"]);
-      fromAC.addListener("place_changed", () => {
-        const place = fromAC.getPlace();
-        if (!place.geometry) return;
-        if (markerA) markerA.setMap(null);
-        markerA = new google.maps.Marker({
-          position: place.geometry.location,
-          map,
-          draggable: true,
-          animation: google.maps.Animation.DROP,
-          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+      document.querySelectorAll("input[name='vehicle']").forEach(radio => {
+        radio.addEventListener("change", e => {
+          vehicle = e.target.value;
+          if (markerA) markerA.setIcon({ url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) });
+          tryDirection();
         });
-        markerA.addListener("dragend", () => {
-          reverseGeocode(markerA.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("fromInput").value = alamat;
-            tryDirection();
-          });
-        });
-        tryDirection();
-      });
-
-      const toAC = new google.maps.places.Autocomplete(document.getElementById("toInput"), {
-        componentRestrictions: { country: "ID" },
-        strictBounds: false
-      });
-      toAC.setFields(["geometry"]);
-      toAC.addListener("place_changed", () => {
-        const place = toAC.getPlace();
-        if (!place.geometry) return;
-        if (markerB) markerB.setMap(null);
-        markerB = new google.maps.Marker({
-          position: place.geometry.location,
-          map,
-          draggable: true,
-          animation: google.maps.Animation.DROP
-        });
-        markerB.addListener("dragend", () => {
-          reverseGeocode(markerB.getPosition(), (alamat) => {
-            if (alamat) document.getElementById("toInput").value = alamat;
-            tryDirection();
-          });
-        });
-        tryDirection();
       });
     }
 
-    function tampilkanRadar() {
-      if (document.querySelector(".radar")) return;
-      const radar = document.createElement("div");
-      radar.className = "radar";
-      radar.innerHTML = "<span>Mencari Driver...</span>";
-      document.body.appendChild(radar);
+    function kirimWebview() {
+      if (!window.latestResult) return alert("Harap pilih lokasi dulu.");
+      if (window.AppInventor) {
+        window.AppInventor.setWebViewString(JSON.stringify(window.latestResult));
+      } else {
+        alert("Simulasi hasil:\n" + JSON.stringify(window.latestResult, null, 2));
+      }
     }
 
-    function sembunyikanRadar() {
-      const radar = document.querySelector(".radar");
-      if (radar) radar.remove();
-    }
-  </script>
-  <script>
-    const keyParam = new URLSearchParams(window.location.search).get("key");
     if (keyParam) {
       const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&libraries=places&callback=initMap`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&callback=initMap`;
       script.async = true;
       script.defer = true;
       document.head.appendChild(script);
     } else {
-      alert("API Key Google Maps tidak ditemukan di URL.");
+      alert("API Key Google Maps tidak ditemukan.");
     }
   </script>
 </body>
