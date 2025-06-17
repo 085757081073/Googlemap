@@ -1,145 +1,94 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Ojek Online</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      #map {
-        height: 400px;
-        width: 100%;
-      }
-      body {
-        margin: 0;
-        font-family: sans-serif;
-      }
-      .form-container {
-        padding: 10px;
-        background-color: #fff;
-        position: absolute;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 5;
-        width: 90%;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        border-radius: 8px;
-      }
-      #price-box {
-        padding: 10px;
-        text-align: center;
-        font-weight: bold;
-        font-size: 16px;
-      }
-      #order-section {
-        padding: 10px;
-        text-align: center;
-      }
-      #order-btn {
-        padding: 10px 20px;
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        font-size: 16px;
-        cursor: pointer;
-        width: 90%;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="form-container">
-      <input id="fromInput" type="text" placeholder="Titik Jemput" style="width: 100%; padding: 8px; margin-bottom: 8px;" />
-      <input id="toInput" type="text" placeholder="Titik Tujuan" style="width: 100%; padding: 8px;" />
-    </div>
+<head>
+  <meta charset="utf-8">
+  <title>Peta Rute</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; }
+    #map { height: 80%; }
+    #output {
+      padding: 10px;
+      font-size: 18px;
+      text-align: center;
+    }
+    #pesan {
+      width: 90%;
+      max-width: 300px;
+      display: block;
+      margin: 10px auto;
+      padding: 10px;
+      font-size: 18px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="output">Harga akan muncul di sini</div>
+  <button id="pesan">Pesan Sekarang</button>
 
-    <div id="map"></div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const from = params.get('from');         // format: -6.2,106.8
+    const to = params.get('to');             // format: -6.3,106.9
+    const vehicle = (params.get('vehicle') || '').toLowerCase();
+    const hargaPerKm = parseFloat(params.get('harga'));
+    const apiKey = params.get('key');
 
-    <div id="price-box">Harga akan muncul di sini</div>
-    <div id="order-section">
-      <button id="order-btn">Pesan Sekarang</button>
-    </div>
+    if (!from || !to || !hargaPerKm || !apiKey) {
+      document.getElementById('output').innerText = "Ups! Parameter URL tidak lengkap.";
+    } else {
+      const fromLatLng = from.split(',').map(Number);
+      const toLatLng = to.split(',').map(Number);
 
-    <script>
-      let map, directionsService, directionsRenderer, fromPlace, toPlace;
-
-      function initMap() {
-        directionsService = new google.maps.DirectionsService();
-        directionsRenderer = new google.maps.DirectionsRenderer();
-
-        map = new google.maps.Map(document.getElementById("map"), {
-          center: { lat: -6.2, lng: 106.8 },
-          zoom: 12,
+      window.initMap = function () {
+        const map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 14,
+          center: { lat: fromLatLng[0], lng: fromLatLng[1] },
         });
 
-        directionsRenderer.setMap(map);
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
 
-        const fromInput = document.getElementById("fromInput");
-        const toInput = document.getElementById("toInput");
+        directionsService.route({
+          origin: { lat: fromLatLng[0], lng: fromLatLng[1] },
+          destination: { lat: toLatLng[0], lng: toLatLng[1] },
+          travelMode: google.maps.TravelMode.DRIVING,
+        }, (response, status) => {
+          if (status === 'OK') {
+            directionsRenderer.setDirections(response);
+            const route = response.routes[0].legs[0];
+            const jarakKm = route.distance.value / 1000;
+            let totalHarga = hargaPerKm * jarakKm;
 
-        const fromAutocomplete = new google.maps.places.Autocomplete(fromInput);
-        const toAutocomplete = new google.maps.places.Autocomplete(toInput);
-
-        fromAutocomplete.addListener("place_changed", () => {
-          fromPlace = fromAutocomplete.getPlace();
-          tryRoute();
-        });
-
-        toAutocomplete.addListener("place_changed", () => {
-          toPlace = toAutocomplete.getPlace();
-          tryRoute();
-        });
-
-        // Load from URL if available
-        const params = new URLSearchParams(window.location.search);
-        const from = params.get("from");
-        const to = params.get("to");
-
-        if (from && to) {
-          const [fromLat, fromLng] = from.split(",").map(Number);
-          const [toLat, toLng] = to.split(",").map(Number);
-          fromPlace = { geometry: { location: new google.maps.LatLng(fromLat, fromLng) } };
-          toPlace = { geometry: { location: new google.maps.LatLng(toLat, toLng) } };
-          tryRoute();
-        }
-      }
-
-      function tryRoute() {
-        if (fromPlace && toPlace) {
-          directionsService.route(
-            {
-              origin: fromPlace.geometry.location,
-              destination: toPlace.geometry.location,
-              travelMode: "DRIVING",
-            },
-            (result, status) => {
-              if (status === "OK") {
-                directionsRenderer.setDirections(result);
-                const route = result.routes[0].legs[0];
-                const distanceInKm = route.distance.value / 1000;
-
-                const params = new URLSearchParams(window.location.search);
-                const hargaPerKm = parseInt(params.get("harga")) || 0;
-                const tipe = params.get("tipe") || "tidak diketahui";
-
-                const totalHarga = Math.round(distanceInKm * hargaPerKm);
-                document.getElementById("price-box").innerText = 
-                  `Jarak: ${distanceInKm.toFixed(2)} km\nHarga: Rp${totalHarga.toLocaleString()} (${tipe})`;
-
-                document.getElementById("order-btn").onclick = () => {
-                  alert(`Memesan ${tipe}\nBiaya: Rp${totalHarga.toLocaleString()}`);
-                  // atau kirim data ke server di sini
-                };
-              } else {
-                alert("Gagal membuat rute: " + status);
-              }
+            // Terapkan harga minimum berdasarkan vehicle
+            if (['motor', 'kurir', 'makanan', 'belanja'].includes(vehicle)) {
+              totalHarga = Math.max(totalHarga, 10000);
+            } else if (['mobil', 'taksi'].includes(vehicle)) {
+              totalHarga = Math.max(totalHarga, 15000);
+            } else if (['pickup', 'truk'].includes(vehicle)) {
+              totalHarga = Math.max(totalHarga, 25000);
+            } else {
+              totalHarga = Math.max(totalHarga, 10000);
             }
-          );
-        }
-      }
-    </script>
 
-    <script async
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEsbn9W4ivUesB15wmDuMhOT4JR6Mq9Bs&libraries=places&callback=initMap">
-    </script>
-  </body>
+            document.getElementById('output').innerText = "Rp " + Math.round(totalHarga).toLocaleString();
+          } else {
+            document.getElementById('output').innerText = "Gagal memuat rute.";
+          }
+        });
+      };
+
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+  </script>
+</body>
 </html>
