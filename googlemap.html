@@ -1,4 +1,5 @@
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html>
 <head>
   <meta charset="utf-8" />
   <title>Rute Ojek</title>
@@ -61,6 +62,7 @@
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
   </div>
   <div id="map"></div>
+
   <script>
     let map, directionsService, directionsRenderer;
     let markerA, markerB, circleB;
@@ -68,139 +70,157 @@
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
     const toParam = urlParams.get("to");
-    const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;const iconUrls = {
-  motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
-  mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
-  kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
-  bentor: 'https://cdn-icons-png.flaticon.com/128/7890/7890227.png',
-  pickup: 'https://cdn-icons-png.flaticon.com/128/1048/1048314.png',
-  pickup_scooter: 'https://cdn-icons-png.flaticon.com/128/3177/3177363.png'
-};
+    const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;
 
-const getLatLng = (val) => {
-  if (!val) return null;
-  const parts = val.split(',').map(Number);
-  return parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) ? { lat: parts[0], lng: parts[1] } : null;
-};
+    const iconUrls = {
+      motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
+      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
+      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
+      bentor: 'https://cdn-icons-png.flaticon.com/128/7890/7890227.png',
+      pickup: 'https://cdn-icons-png.flaticon.com/128/1048/1048314.png',
+      pickup_scooter: 'https://cdn-icons-png.flaticon.com/128/3177/3177363.png'
+    };
 
-function reverseGeocode(latlng, callback) {
-  const geocoder = new google.maps.Geocoder();
-  geocoder.geocode({ location: latlng }, (results, status) => {
-    if (status === 'OK' && results[0]) {
-      callback(results[0].formatted_address);
-    } else {
-      callback(null);
+    const getLatLng = (val) => {
+      if (!val) return null;
+      const parts = val.split(',').map(Number);
+      return parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) ? { lat: parts[0], lng: parts[1] } : null;
+    };
+
+    function reverseGeocode(latlng, callback) {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ location: latlng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          callback(results[0].formatted_address);
+        } else {
+          callback(null);
+        }
+      });
     }
-  });
-}
 
-function tryDirection() {
-  if (!markerA || !markerB) return;
-  const from = markerA.getPosition();
-  const to = markerB.getPosition();
-  const isMotor = vehicle === "motor";
+    function tryDirection() {
+      if (!markerA || !markerB) return;
+      const from = markerA.getPosition();
+      const to = markerB.getPosition();
+      const isMotor = vehicle === "motor";
 
-  if (circleB) circleB.setMap(null);
+      if (circleB) circleB.setMap(null);
 
-  directionsService.route({
-    origin: from,
-    destination: to,
-    travelMode: google.maps.TravelMode.DRIVING,
-    region: "ID",
-    avoidTolls: isMotor
-  }, (res, status) => {
-    if (status === "OK") {
-      directionsRenderer.setDirections(res);
-      const leg = res.routes[0].legs[0];
-      const durasiTraffic = leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text;
+      directionsService.route({
+        origin: from,
+        destination: to,
+        travelMode: google.maps.TravelMode.DRIVING,
+        region: "ID",
+        avoidTolls: isMotor
+      }, (res, status) => {
+        if (status === "OK") {
+          directionsRenderer.setDirections(res);
+          const leg = res.routes[0].legs[0];
+          const durasiTraffic = leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text;
 
-      circleB = new google.maps.Circle({
-        center: to,
-        radius: 50,
-        map: map,
-        strokeColor: "#4285f4",
-        strokeOpacity: 0.5,
-        strokeWeight: 2,
-        fillColor: "#4285f4",
-        fillOpacity: 0.1
+          circleB = new google.maps.Circle({
+            center: to,
+            radius: 50,
+            map: map,
+            strokeColor: "#4285f4",
+            strokeOpacity: 0.5,
+            strokeWeight: 2,
+            fillColor: "#4285f4",
+            fillOpacity: 0.1
+          });
+
+          let jarakKm = leg.distance.value / 1000;
+          let harga = Math.round(jarakKm * hargaPerKm);
+
+          if (vehicle === 'pickup' && harga < 100000) {
+            harga = 100000;
+          }
+          if (vehicle === 'pickup_scooter') {
+            harga += 5000;
+          }
+
+          harga = Math.round(harga / 500) * 500;
+
+          const hasil = {
+            jarak: leg.distance.text,
+            durasi: leg.duration.text,
+            durasi_traffic: durasiTraffic,
+            harga: harga,
+            alamat_a: document.getElementById("fromInput").value,
+            alamat_b: document.getElementById("toInput").value,
+            from_lat: from.lat(),
+            from_lng: from.lng(),
+            to_lat: to.lat(),
+            to_lng: to.lng()
+          };
+
+          if (window.AppInventor) {
+            window.AppInventor.setWebViewString(JSON.stringify(hasil));
+          }
+        }
+      });
+    }
+
+    function initMap() {
+      const lokasiA = getLatLng(fromParam);
+      const lokasiB = getLatLng(toParam);
+
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 15,
+        center: lokasiA || { lat: -6.2, lng: 106.8 }
       });
 
-      let jarakKm = leg.distance.value / 1000;
-      let harga = Math.round(jarakKm * hargaPerKm);
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
 
-      if (vehicle === 'pickup') {
-        if (harga < 100000) harga = 100000;
+      if (lokasiA) {
+        markerA = new google.maps.Marker({
+          position: lokasiA,
+          map: map,
+          icon: {
+            url: iconUrls[vehicle] || null,
+            scaledSize: new google.maps.Size(40, 40)
+          }
+        });
+
+        reverseGeocode(lokasiA, (alamat) => {
+          document.getElementById("fromInput").value = alamat || "";
+        });
       }
-      if (vehicle === 'pickup_scooter') {
-        harga += 5000;
+
+      if (lokasiB) {
+        markerB = new google.maps.Marker({
+          position: lokasiB,
+          map: map
+        });
+
+        reverseGeocode(lokasiB, (alamat) => {
+          document.getElementById("toInput").value = alamat || "";
+        });
       }
 
-      harga = Math.round(harga / 500) * 500;
-
-      const hasil = {
-        jarak: leg.distance.text,
-        durasi: leg.duration.text,
-        durasi_traffic: durasiTraffic,
-        harga: harga,
-        alamat_a: document.getElementById("fromInput").value,
-        alamat_b: document.getElementById("toInput").value,
-        from_lat: from.lat(),
-        from_lng: from.lng(),
-        to_lat: to.lat(),
-        to_lng: to.lng()
-      };
-
-      if (window.AppInventor) {
-        window.AppInventor.setWebViewString(JSON.stringify(hasil));
-      }
+      if (lokasiA && lokasiB) tryDirection();
     }
-  });
-}
 
-function initMap() {
-  const lokasiA = getLatLng(fromParam);
-  const lokasiB = getLatLng(toParam);
+    function initAutocomplete() {
+      const fromInput = document.getElementById("fromInput");
+      const toInput = document.getElementById("toInput");
 
-  map = new google.maps.Map(document.getElementById("map"), {
-    zoom: 15,
-    center: lokasiA || { lat: -6.2, lng: 106.8 }
-  });
+      new google.maps.places.Autocomplete(fromInput);
+      new google.maps.places.Autocomplete(toInput);
+    }
 
-  directionsService = new google.maps.DirectionsService();
-  directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
-
-  if (lokasiA) {
-    markerA = new google.maps.Marker({
-      position: lokasiA,
-      map: map,
-      icon: iconUrls[vehicle] || null
-    });
-
-    reverseGeocode(lokasiA, (alamat) => {
-      document.getElementById("fromInput").value = alamat || "";
-    });
-  }
-
-  if (lokasiB) {
-    markerB = new google.maps.Marker({
-      position: lokasiB,
-      map: map
-    });
-
-    reverseGeocode(lokasiB, (alamat) => {
-      document.getElementById("toInput").value = alamat || "";
-    });
-  }
-
-  if (lokasiA && lokasiB) tryDirection();
-}
-
+    function onLoad() {
+      initMap();
+      initAutocomplete();
+    }
   </script>
+
   <script>
     const keyParam = new URLSearchParams(window.location.search).get("key");
     if (keyParam) {
       const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&libraries=places&callback=initMap`;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&libraries=places&callback=onLoad`;
       script.async = true;
       script.defer = true;
       document.head.appendChild(script);
