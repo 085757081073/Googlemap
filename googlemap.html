@@ -1,177 +1,145 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <title>Rute Ojek</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-    }
-    #map {
-      flex: 1;
-    }
-    .panel {
-      padding: 10px;
-      background: #fff;
-      box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-    }
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin: 5px 0;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-    button {
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <div class="panel">
-    <input id="fromInput" type="text" placeholder="Titik Awal" />
-    <input id="toInput" type="text" placeholder="Titik Tujuan" />
-    <select id="vehicleSelect">
-      <option value="motor">Motor</option>
-      <option value="mobil">Mobil</option>
-      <option value="bentor">Bentor</option>
-      <option value="kurir">Kurir</option>
-      <option value="pickup">Pickup</option>
-      <option value="taksi">Taksi</option>
-      <option value="makanan">Ojol Makanan</option>
-      <option value="belanja">Ojol Belanja</option>
-    </select>
-    <button onclick="tryDirection()">Pesan Sekarang</button>
-  </div>
-
-  <script>
-    let map, directionsService, directionsRenderer;
-    let markerA, markerB;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const hargaParams = {
-      motor: parseFloat(urlParams.get("harga_motor")) || 0,
-      mobil: parseFloat(urlParams.get("harga_mobil")) || 0,
-      bentor: parseFloat(urlParams.get("harga_bentor")) || 0,
-      kurir: parseFloat(urlParams.get("harga_kurir")) || 0,
-      pickup: parseFloat(urlParams.get("harga_pickup")) || 0,
-      taksi: parseFloat(urlParams.get("harga_taksi")) || 0,
-      makanan: parseFloat(urlParams.get("harga_makanan")) || 0,
-      belanja: parseFloat(urlParams.get("harga_belanja")) || 0,
-    };
-
-    const getLatLng = (val) => {
-      if (!val) return null;
-      const parts = val.split(',').map(Number);
-      return parts.length === 2 ? { lat: parts[0], lng: parts[1] } : null;
-    };
-
-    function initMap() {
-      const from = getLatLng(urlParams.get("from")) || { lat: -6.2, lng: 106.8 };
-      const to = getLatLng(urlParams.get("to"));
-
-      map = new google.maps.Map(document.getElementById("map"), {
-        center: from,
-        zoom: 14,
-      });
-
-      directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: false });
-      directionsRenderer.setMap(map);
-
-      if (from) {
-        markerA = new google.maps.Marker({ position: from, map });
+  <head>
+    <title>Ojek Online</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      #map {
+        height: 400px;
+        width: 100%;
       }
-      if (to) {
-        markerB = new google.maps.Marker({ position: to, map });
-        calculateRoute(from, to);
+      body {
+        margin: 0;
+        font-family: sans-serif;
       }
-    }
+      .form-container {
+        padding: 10px;
+        background-color: #fff;
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 5;
+        width: 90%;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        border-radius: 8px;
+      }
+      #price-box {
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 16px;
+      }
+      #order-section {
+        padding: 10px;
+        text-align: center;
+      }
+      #order-btn {
+        padding: 10px 20px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        cursor: pointer;
+        width: 90%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="form-container">
+      <input id="fromInput" type="text" placeholder="Titik Jemput" style="width: 100%; padding: 8px; margin-bottom: 8px;" />
+      <input id="toInput" type="text" placeholder="Titik Tujuan" style="width: 100%; padding: 8px;" />
+    </div>
 
-    function calculateRoute(from, to) {
-      directionsService.route({
-        origin: from,
-        destination: to,
-        travelMode: google.maps.TravelMode.DRIVING,
-        region: "ID"
-      }, (res, status) => {
-        if (status === "OK") {
-          directionsRenderer.setDirections(res);
-          const leg = res.routes[0].legs[0];
-          const distanceKm = leg.distance.value / 1000;
-          const vehicle = document.getElementById("vehicleSelect").value;
-          const hargaPerKm = hargaParams[vehicle] || 0;
-          let harga = Math.round(distanceKm * hargaPerKm);
-          if (harga < 10000) harga = 10000;
-          harga = Math.round(harga / 500) * 500;
+    <div id="map"></div>
 
-          const hasil = {
-            kendaraan: vehicle,
-            jarak: leg.distance.text,
-            durasi: leg.duration.text,
-            harga: harga,
-            from_lat: from.lat,
-            from_lng: from.lng,
-            to_lat: to.lat,
-            to_lng: to.lng
-          };
+    <div id="price-box">Harga akan muncul di sini</div>
+    <div id="order-section">
+      <button id="order-btn">Pesan Sekarang</button>
+    </div>
 
-          if (window.AppInventor) {
-            window.AppInventor.setWebViewString(JSON.stringify(hasil));
-          } else {
-            console.log(hasil); // untuk debug di browser biasa
-          }
+    <script>
+      let map, directionsService, directionsRenderer, fromPlace, toPlace;
+
+      function initMap() {
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer();
+
+        map = new google.maps.Map(document.getElementById("map"), {
+          center: { lat: -6.2, lng: 106.8 },
+          zoom: 12,
+        });
+
+        directionsRenderer.setMap(map);
+
+        const fromInput = document.getElementById("fromInput");
+        const toInput = document.getElementById("toInput");
+
+        const fromAutocomplete = new google.maps.places.Autocomplete(fromInput);
+        const toAutocomplete = new google.maps.places.Autocomplete(toInput);
+
+        fromAutocomplete.addListener("place_changed", () => {
+          fromPlace = fromAutocomplete.getPlace();
+          tryRoute();
+        });
+
+        toAutocomplete.addListener("place_changed", () => {
+          toPlace = toAutocomplete.getPlace();
+          tryRoute();
+        });
+
+        // Load from URL if available
+        const params = new URLSearchParams(window.location.search);
+        const from = params.get("from");
+        const to = params.get("to");
+
+        if (from && to) {
+          const [fromLat, fromLng] = from.split(",").map(Number);
+          const [toLat, toLng] = to.split(",").map(Number);
+          fromPlace = { geometry: { location: new google.maps.LatLng(fromLat, fromLng) } };
+          toPlace = { geometry: { location: new google.maps.LatLng(toLat, toLng) } };
+          tryRoute();
         }
-      });
-    }
+      }
 
-    function tryDirection() {
-      const fromInput = document.getElementById("fromInput").value;
-      const toInput = document.getElementById("toInput").value;
-      const geocoder = new google.maps.Geocoder();
+      function tryRoute() {
+        if (fromPlace && toPlace) {
+          directionsService.route(
+            {
+              origin: fromPlace.geometry.location,
+              destination: toPlace.geometry.location,
+              travelMode: "DRIVING",
+            },
+            (result, status) => {
+              if (status === "OK") {
+                directionsRenderer.setDirections(result);
+                const route = result.routes[0].legs[0];
+                const distanceInKm = route.distance.value / 1000;
 
-      geocoder.geocode({ address: fromInput }, (res1, status1) => {
-        if (status1 === "OK" && res1[0]) {
-          const fromLoc = res1[0].geometry.location;
+                const params = new URLSearchParams(window.location.search);
+                const hargaPerKm = parseInt(params.get("harga")) || 0;
+                const tipe = params.get("tipe") || "tidak diketahui";
 
-          geocoder.geocode({ address: toInput }, (res2, status2) => {
-            if (status2 === "OK" && res2[0]) {
-              const toLoc = res2[0].geometry.location;
-              if (markerA) markerA.setMap(null);
-              if (markerB) markerB.setMap(null);
+                const totalHarga = Math.round(distanceInKm * hargaPerKm);
+                document.getElementById("price-box").innerText = 
+                  `Jarak: ${distanceInKm.toFixed(2)} km\nHarga: Rp${totalHarga.toLocaleString()} (${tipe})`;
 
-              markerA = new google.maps.Marker({ position: fromLoc, map });
-              markerB = new google.maps.Marker({ position: toLoc, map });
-
-              calculateRoute(fromLoc, toLoc);
+                document.getElementById("order-btn").onclick = () => {
+                  alert(`Memesan ${tipe}\nBiaya: Rp${totalHarga.toLocaleString()}`);
+                  // atau kirim data ke server di sini
+                };
+              } else {
+                alert("Gagal membuat rute: " + status);
+              }
             }
-          });
+          );
         }
-      });
-    }
-  </script>
+      }
+    </script>
 
-  <script>
-    const keyParam = urlParams.get("key");
-    if (keyParam) {
-      const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&libraries=places&callback=initMap`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    } else {
-      alert("API Key Google Maps tidak ditemukan.");
-    }
-  </script>
-</body>
+    <script async
+      src="https://maps.googleapis.com/maps/api/js?key=API_KEY_KAMU&libraries=places&callback=initMap">
+    </script>
+  </body>
 </html>
