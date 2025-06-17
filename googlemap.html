@@ -62,6 +62,7 @@
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
   </div>
   <div id="map"></div>
+
   <script>
     let map, directionsService, directionsRenderer;
     let markerA, markerB, circleB;
@@ -155,42 +156,38 @@
       const fromLatLng = getLatLng(fromParam) || { lat: -6.2, lng: 106.8 };
       const toLatLng = getLatLng(toParam);
 
-      const styledMapType = new google.maps.StyledMapType([
-        { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-        { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-        { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-        { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-        { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-        { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-        { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-        { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-        { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
-        { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
-        { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] }
-      ]);
+      const darkStyle = [
+        { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
+        { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+        { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+        { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] },
+        { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "color": "#757575" }] },
+        { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+        { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
+        { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212121" }] },
+        { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#8a8a8a" }] },
+        { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
+        { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] },
+        { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#3d3d3d" }] }
+      ];
 
       map = new google.maps.Map(document.getElementById("map"), {
         center: fromLatLng,
         zoom: 14,
         disableDefaultUI: true,
-        mapTypeControlOptions: {
-          mapTypeIds: ["roadmap", "styled_map"]
-        }
+        styles: darkStyle
       });
-
-      map.mapTypes.set("styled_map", styledMapType);
-      map.setMapTypeId("styled_map");
 
       directionsService = new google.maps.DirectionsService();
       directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
       directionsRenderer.setMap(map);
 
-      // marker A
       if (fromParam) {
         markerA = new google.maps.Marker({
           position: fromLatLng,
           map,
           draggable: true,
+          clickable: false,
           animation: google.maps.Animation.DROP,
           icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
@@ -205,12 +202,12 @@
         });
       }
 
-      // marker B
       if (toParam) {
         markerB = new google.maps.Marker({
           position: toLatLng,
           map,
           draggable: true,
+          clickable: false,
           animation: google.maps.Animation.DROP
         });
         markerB.addListener("dragend", () => {
@@ -229,6 +226,7 @@
         componentRestrictions: { country: "ID" },
         strictBounds: false
       });
+      fromAC.setFields(["geometry"]);
       fromAC.addListener("place_changed", () => {
         const place = fromAC.getPlace();
         if (!place.geometry) return;
@@ -237,8 +235,15 @@
           position: place.geometry.location,
           map,
           draggable: true,
+          clickable: false,
           animation: google.maps.Animation.DROP,
           icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
+        });
+        markerA.addListener("dragend", () => {
+          reverseGeocode(markerA.getPosition(), (alamat) => {
+            if (alamat) document.getElementById("fromInput").value = alamat;
+            tryDirection();
+          });
         });
         tryDirection();
       });
@@ -247,6 +252,7 @@
         componentRestrictions: { country: "ID" },
         strictBounds: false
       });
+      toAC.setFields(["geometry"]);
       toAC.addListener("place_changed", () => {
         const place = toAC.getPlace();
         if (!place.geometry) return;
@@ -255,23 +261,17 @@
           position: place.geometry.location,
           map,
           draggable: true,
+          clickable: false,
           animation: google.maps.Animation.DROP
+        });
+        markerB.addListener("dragend", () => {
+          reverseGeocode(markerB.getPosition(), (alamat) => {
+            if (alamat) document.getElementById("toInput").value = alamat;
+            tryDirection();
+          });
         });
         tryDirection();
       });
-    }
-
-    function tampilkanRadar() {
-      if (document.querySelector(".radar")) return;
-      const radar = document.createElement("div");
-      radar.className = "radar";
-      radar.innerHTML = "<span>Mencari Driver...</span>";
-      document.body.appendChild(radar);
-    }
-
-    function sembunyikanRadar() {
-      const radar = document.querySelector(".radar");
-      if (radar) radar.remove();
     }
   </script>
 
