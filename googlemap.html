@@ -54,27 +54,12 @@
       50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.2; }
       100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
     }
-    .search-button {
-      background-color: #4285f4;
-      color: white;
-      border: none;
-      padding: 10px;
-      width: 100%;
-      font-size: 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-top: 5px;
-    }
-    .search-button:hover {
-      background-color: #3367d6;
-    }
   </style>
 </head>
 <body>
   <div class="panel">
     <input id="fromInput" type="text" placeholder="Titik Awal" />
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
-    <button id="searchButton" class="search-button">Cari Driver</button>
   </div>
   <div id="map"></div>
   <div class="radar" id="radar" style="display:none;">
@@ -112,40 +97,26 @@
     }
 
     function showRadar(message) {
+      if (!markerA) return;
+      
+      // Fokus ke titik awal dengan zoom maksimum
+      map.panTo(markerA.getPosition());
+      map.setZoom(18); // Zoom maksimum
+      
+      // Tampilkan radar
       const radar = document.getElementById('radar');
       radar.style.display = 'flex';
       radar.querySelector('span').textContent = message || 'Mencari Driver terdekat...';
       
-      // Mulai animasi zoom out
-      let zoomLevel = 15;
+      // Mulai animasi zoom out secara smooth
+      let zoomLevel = 18;
+      const zoomStep = 0.05;
       radarInterval = setInterval(() => {
-        if (zoomLevel > 12) {
-          zoomLevel -= 0.1;
+        if (zoomLevel > 12) { // Hentikan di zoom level 12
+          zoomLevel -= zoomStep;
           map.setZoom(zoomLevel);
         }
-      }, 200);
-    }
-
-    function searchDriver() {
-      if (!markerA) {
-        alert("Silakan tentukan titik awal terlebih dahulu");
-        return;
-      }
-      
-      // Fokus ke titik awal
-      map.panTo(markerA.getPosition());
-      map.setZoom(15);
-      
-      // Tampilkan radar dan mulai animasi
-      showRadar('Mencari Driver terdekat...');
-      
-      // Simulasikan pencarian driver (3 detik)
-      setTimeout(() => {
-        hideRadar();
-        if (markerB) {
-          tryDirection();
-        }
-      }, 3000);
+      }, 50); // Interval lebih cepat untuk animasi lebih smooth
     }
 
     function reverseGeocode(latlng, callback) {
@@ -365,9 +336,6 @@
       try {
         initMap();
         initAutocomplete();
-        
-        // Tambahkan event listener untuk tombol cari driver
-        document.getElementById('searchButton').addEventListener('click', searchDriver);
       } catch (error) {
         console.error("Error initializing map:", error);
         sendToAppInventor({
