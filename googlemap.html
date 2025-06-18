@@ -115,19 +115,15 @@
       const jsonData = JSON.stringify(data);
       console.log("Mengirim data ke AppInventor:", jsonData);
       
-      // Metode 1: WebViewString
       if (window.AppInventor && window.AppInventor.setWebViewString) {
         window.AppInventor.setWebViewString(jsonData);
       }
-      // Metode 2: AndroidInterface (untuk Android)
       else if (window.AndroidInterface) {
         window.AndroidInterface.receiveData(jsonData);
       }
-      // Metode 3: iOS (webkit message handler)
       else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.iosHandler) {
         window.webkit.messageHandlers.iosHandler.postMessage(jsonData);
       }
-      // Fallback untuk debugging
       else {
         console.log("Data untuk AppInventor:", jsonData);
         alert("Data siap dikirim ke AppInventor:\n" + jsonData);
@@ -189,7 +185,6 @@
             status: "success"
           };
 
-          // Kirim data ke AppInventor
           sendToAppInventor(hasil);
         } else {
           console.error("Gagal menghitung rute:", status);
@@ -207,6 +202,7 @@
 
       showRadar('Menyiapkan peta...');
 
+      // Inisialisasi peta dengan pengaturan baru
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 15,
         center: lokasiA || { lat: -6.2, lng: 106.8 },
@@ -221,7 +217,14 @@
             "elementType": "labels",
             "stylers": [{ "visibility": "off" }]
           }
-        ]
+        ],
+        clickableIcons: false, // Ini yang menghilangkan popup
+        gestureHandling: "greedy" // Untuk kontrol zoom yang lebih baik
+      });
+
+      // Tambahkan ini untuk memastikan tidak ada popup yang muncul
+      google.maps.event.addListener(map, 'click', function(event) {
+        // Kosongkan untuk mencegah munculnya info window
       });
 
       directionsService = new google.maps.DirectionsService();
@@ -343,7 +346,6 @@
       console.error(errorMsg);
       document.getElementById('radar').querySelector('span').textContent = 'Error: API Key tidak ditemukan';
       
-      // Kirim error ke AppInventor
       if (window.AppInventor) {
         window.AppInventor.setWebViewString(JSON.stringify({
           status: "error",
