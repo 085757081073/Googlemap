@@ -116,7 +116,7 @@
           zoomLevel -= zoomStep;
           map.setZoom(zoomLevel);
         }
-      }, 150); // Interval lebih cepat untuk animasi lebih smooth
+      }, 150);
     }
 
     function reverseGeocode(latlng, callback) {
@@ -221,18 +221,7 @@
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 15,
         center: lokasiA || { lat: -6.2, lng: 106.8 },
-        styles: [
-          {
-            "featureType": "poi",
-            "elementType": "labels",
-            "stylers": [{ "visibility": "off" }]
-          },
-          {
-            "featureType": "transit",
-            "elementType": "labels",
-            "stylers": [{ "visibility": "off" }]
-          }
-        ],
+        mapId: "bdfcf9c6ad20d1891a0b43e9", // Style ID yang Anda tentukan
         clickableIcons: false,
         gestureHandling: "greedy"
       });
