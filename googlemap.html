@@ -30,14 +30,29 @@
       font-size: 16px;
       box-sizing: border-box;
     }
-    .price-display {
-      background: #4285f4;
+    .radar {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 240px;
+      height: 240px;
+      background: rgba(255, 0, 0, 0.3);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse 1.5s infinite;
+      z-index: 999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .radar span {
       color: white;
-      padding: 8px;
-      border-radius: 4px;
-      margin-top: 5px;
-      text-align: center;
       font-weight: bold;
+    }
+    @keyframes pulse {
+      0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.2; }
+      100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
     }
   </style>
 </head>
@@ -45,9 +60,11 @@
   <div class="panel">
     <input id="fromInput" type="text" placeholder="Titik Awal" />
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
-    <div id="priceDisplay" class="price-display">Harga: -</div>
   </div>
   <div id="map"></div>
+  <div class="radar" id="radar">
+    <span>Memuat peta...</span>
+  </div>
 
   <script>
     let map, directionsService, directionsRenderer;
@@ -58,7 +75,6 @@
     const toParam = urlParams.get("to");
     const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;
 
-    // Daftar icon kendaraan
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
       mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
@@ -68,48 +84,42 @@
       pickup_scooter: 'https://cdn-icons-png.flaticon.com/128/3177/3177363.png'
     };
 
-    // Minimum harga berdasarkan kendaraan
-    const minPrices = {
-      motor: 10000,
-      bentor: 15000, // Minimal 14.000 tapi Anda minta 15.000
-      kurir: 15000,  // Minimal 10.000 + 5.000 = 15.000
-      mobil: 15000,
-      pickup: 100000,
-      pickup_scooter: 100000 + 5000
+    const getLatLng = (val) => {
+      if (!val) return null;
+      const parts = val.split(',').map(Number);
+      return parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) ? { lat: parts[0], lng: parts[1] } : null;
     };
 
-    function applyMinPrice(basePrice, vehicleType) {
-      const minPrice = minPrices[vehicleType] || 0;
-      return Math.max(basePrice, minPrice);
+    function hideRadar() {
+      document.getElementById('radar').style.display = 'none';
     }
 
-    function calculateFinalPrice(jarakKm, vehicleType) {
-      let harga = jarakKm * hargaPerKm;
-      
-      // Terapkan minimum harga berdasarkan kendaraan
-      harga = applyMinPrice(harga, vehicleType);
-      
-      // Tambahan khusus untuk pickup_scooter
-      if (vehicleType === 'pickup_scooter') {
-        harga += 5000;
-      }
-      
-      // Bulatkan ke kelipatan 500
-      return Math.round(harga / 500) * 500;
+    function showRadar(message) {
+      const radar = document.getElementById('radar');
+      radar.style.display = 'flex';
+      radar.querySelector('span').textContent = message || 'Memuat...';
     }
 
-    function updatePriceDisplay(price) {
-      document.getElementById('priceDisplay').textContent = `Harga: Rp${price.toLocaleString('id-ID')}`;
+    function reverseGeocode(latlng, callback) {
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({ location: latlng }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          callback(results[0].formatted_address);
+        } else {
+          callback(null);
+        }
+      });
     }
 
     function tryDirection() {
       if (!markerA || !markerB) return;
-      
       const from = markerA.getPosition();
       const to = markerB.getPosition();
       const isMotor = vehicle === "motor";
 
       if (circleB) circleB.setMap(null);
+
+      showRadar('Menghitung rute...');
 
       directionsService.route({
         origin: from,
@@ -118,19 +128,13 @@
         region: "ID",
         avoidTolls: isMotor
       }, (res, status) => {
+        hideRadar();
+        
         if (status === "OK") {
           directionsRenderer.setDirections(res);
           const leg = res.routes[0].legs[0];
           const durasiTraffic = leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text;
-          const jarakKm = leg.distance.value / 1000;
-          
-          // Hitung harga akhir
-          const finalPrice = calculateFinalPrice(jarakKm, vehicle);
-          
-          // Update tampilan harga
-          updatePriceDisplay(finalPrice);
 
-          // Buat circle di tujuan
           circleB = new google.maps.Circle({
             center: to,
             radius: 50,
@@ -142,31 +146,99 @@
             fillOpacity: 0.1
           });
 
+          const jarakKm = leg.distance.value / 1000;
+          const harga = Math.round(jarakKm * hargaPerKm);
+
           const hasil = {
             jarak: leg.distance.text,
+            jarak_km: jarakKm,
             durasi: leg.duration.text,
             durasi_traffic: durasiTraffic,
-            harga: finalPrice,
+            harga_per_km: hargaPerKm,
+            harga_total: harga,
             alamat_a: document.getElementById("fromInput").value,
             alamat_b: document.getElementById("toInput").value,
             from_lat: from.lat(),
             from_lng: from.lng(),
             to_lat: to.lat(),
             to_lng: to.lng(),
-            kendaraan: vehicle
+            vehicle: vehicle
           };
 
-          if (typeof window.AppInventor !== 'undefined') {
+          if (window.AppInventor) {
             window.AppInventor.setWebViewString(JSON.stringify(hasil));
           } else {
             console.log("Data rute:", hasil);
           }
+        } else {
+          console.error("Gagal menghitung rute:", status);
         }
       });
     }
 
-    // Fungsi-fungsi lainnya (initMap, initAutocomplete, onLoad) tetap sama seperti sebelumnya
-    // ... [kode initMap, initAutocomplete, dan onLoad yang sama dengan sebelumnya]
+    function initMap() {
+      const lokasiA = getLatLng(fromParam);
+      const lokasiB = getLatLng(toParam);
+
+      showRadar('Menyiapkan peta...');
+
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 15,
+        center: lokasiA || { lat: -6.2, lng: 106.8 }
+      });
+
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
+
+      if (lokasiA) {
+        markerA = new google.maps.Marker({
+          position: lokasiA,
+          map: map,
+          icon: {
+            url: iconUrls[vehicle] || null,
+            scaledSize: new google.maps.Size(40, 40)
+          }
+        });
+
+        reverseGeocode(lokasiA, (alamat) => {
+          document.getElementById("fromInput").value = alamat || "";
+        });
+      }
+
+      if (lokasiB) {
+        markerB = new google.maps.Marker({
+          position: lokasiB,
+          map: map,
+          icon: {
+            url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+            scaledSize: new google.maps.Size(40, 40)
+          }
+        });
+
+        reverseGeocode(lokasiB, (alamat) => {
+          document.getElementById("toInput").value = alamat || "";
+        });
+      }
+
+      if (lokasiA && lokasiB) {
+        tryDirection();
+      } else {
+        hideRadar();
+      }
+    }
+
+    function initAutocomplete() {
+      const fromInput = document.getElementById("fromInput");
+      const toInput = document.getElementById("toInput");
+
+      new google.maps.places.Autocomplete(fromInput);
+      new google.maps.places.Autocomplete(toInput);
+    }
+
+    function onLoad() {
+      initMap();
+      initAutocomplete();
+    }
   </script>
 
   <script>
@@ -179,6 +251,7 @@
       document.head.appendChild(script);
     } else {
       alert("API Key Google Maps tidak ditemukan di URL.");
+      document.getElementById('radar').querySelector('span').textContent = 'Error: API Key tidak ditemukan';
     }
   </script>
 </body>
