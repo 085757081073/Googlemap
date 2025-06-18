@@ -54,21 +54,37 @@
       50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.2; }
       100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
     }
+    .search-button {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px;
+      width: 100%;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 5px;
+    }
+    .search-button:hover {
+      background-color: #3367d6;
+    }
   </style>
 </head>
 <body>
   <div class="panel">
     <input id="fromInput" type="text" placeholder="Titik Awal" />
     <input id="toInput" type="text" placeholder="Titik Tujuan" />
+    <button id="searchButton" class="search-button">Cari Driver</button>
   </div>
   <div id="map"></div>
-  <div class="radar" id="radar">
-    <span>Memuat peta...</span>
+  <div class="radar" id="radar" style="display:none;">
+    <span>Mencari Driver terdekat...</span>
   </div>
 
   <script>
     let map, directionsService, directionsRenderer;
     let markerA, markerB, circleB;
+    let radarInterval;
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
@@ -91,6 +107,7 @@
     };
 
     function hideRadar() {
+      clearInterval(radarInterval);
       document.getElementById('radar').style.display = 'none';
     }
 
@@ -98,6 +115,37 @@
       const radar = document.getElementById('radar');
       radar.style.display = 'flex';
       radar.querySelector('span').textContent = message || 'Mencari Driver terdekat...';
+      
+      // Mulai animasi zoom out
+      let zoomLevel = 15;
+      radarInterval = setInterval(() => {
+        if (zoomLevel > 12) {
+          zoomLevel -= 0.1;
+          map.setZoom(zoomLevel);
+        }
+      }, 200);
+    }
+
+    function searchDriver() {
+      if (!markerA) {
+        alert("Silakan tentukan titik awal terlebih dahulu");
+        return;
+      }
+      
+      // Fokus ke titik awal
+      map.panTo(markerA.getPosition());
+      map.setZoom(15);
+      
+      // Tampilkan radar dan mulai animasi
+      showRadar('Mencari Driver terdekat...');
+      
+      // Simulasikan pencarian driver (3 detik)
+      setTimeout(() => {
+        hideRadar();
+        if (markerB) {
+          tryDirection();
+        }
+      }, 3000);
     }
 
     function reverseGeocode(latlng, callback) {
@@ -126,7 +174,6 @@
       }
       else {
         console.log("Data untuk AppInventor:", jsonData);
-        alert("Data siap dikirim ke AppInventor:\n" + jsonData);
       }
     }
 
@@ -200,9 +247,6 @@
       const lokasiA = getLatLng(fromParam);
       const lokasiB = getLatLng(toParam);
 
-      showRadar('Menyiapkan peta...');
-
-      // Inisialisasi peta dengan pengaturan baru
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 15,
         center: lokasiA || { lat: -6.2, lng: 106.8 },
@@ -218,13 +262,13 @@
             "stylers": [{ "visibility": "off" }]
           }
         ],
-        clickableIcons: false, // Ini yang menghilangkan popup
-        gestureHandling: "greedy" // Untuk kontrol zoom yang lebih baik
+        clickableIcons: false,
+        gestureHandling: "greedy"
       });
 
-      // Tambahkan ini untuk memastikan tidak ada popup yang muncul
+      // Blokir info window saat klik peta
       google.maps.event.addListener(map, 'click', function(event) {
-        // Kosongkan untuk mencegah munculnya info window
+        // Tidak melakukan apa-apa
       });
 
       directionsService = new google.maps.DirectionsService();
@@ -271,8 +315,6 @@
 
       if (lokasiA && lokasiB) {
         tryDirection();
-      } else {
-        hideRadar();
       }
     }
 
@@ -323,6 +365,9 @@
       try {
         initMap();
         initAutocomplete();
+        
+        // Tambahkan event listener untuk tombol cari driver
+        document.getElementById('searchButton').addEventListener('click', searchDriver);
       } catch (error) {
         console.error("Error initializing map:", error);
         sendToAppInventor({
@@ -344,6 +389,7 @@
     } else {
       const errorMsg = "API Key Google Maps tidak ditemukan di URL.";
       console.error(errorMsg);
+      document.getElementById('radar').style.display = 'flex';
       document.getElementById('radar').querySelector('span').textContent = 'Error: API Key tidak ditemukan';
       
       if (window.AppInventor) {
