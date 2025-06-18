@@ -111,6 +111,29 @@
       });
     }
 
+    function sendToAppInventor(data) {
+      const jsonData = JSON.stringify(data);
+      console.log("Mengirim data ke AppInventor:", jsonData);
+      
+      // Metode 1: WebViewString
+      if (window.AppInventor && window.AppInventor.setWebViewString) {
+        window.AppInventor.setWebViewString(jsonData);
+      }
+      // Metode 2: AndroidInterface (untuk Android)
+      else if (window.AndroidInterface) {
+        window.AndroidInterface.receiveData(jsonData);
+      }
+      // Metode 3: iOS (webkit message handler)
+      else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.iosHandler) {
+        window.webkit.messageHandlers.iosHandler.postMessage(jsonData);
+      }
+      // Fallback untuk debugging
+      else {
+        console.log("Data untuk AppInventor:", jsonData);
+        alert("Data siap dikirim ke AppInventor:\n" + jsonData);
+      }
+    }
+
     function tryDirection() {
       if (!markerA || !markerB) return;
       const from = markerA.getPosition();
@@ -162,16 +185,18 @@
             from_lng: from.lng(),
             to_lat: to.lat(),
             to_lng: to.lng(),
-            vehicle: vehicle
+            vehicle: vehicle,
+            status: "success"
           };
 
-          if (window.AppInventor) {
-            window.AppInventor.setWebViewString(JSON.stringify(hasil));
-          } else {
-            console.log("Data rute:", hasil);
-          }
+          // Kirim data ke AppInventor
+          sendToAppInventor(hasil);
         } else {
           console.error("Gagal menghitung rute:", status);
+          sendToAppInventor({
+            status: "error",
+            message: "Gagal menghitung rute: " + status
+          });
         }
       });
     }
@@ -184,20 +209,38 @@
 
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 15,
-        center: lokasiA || { lat: -6.2, lng: 106.8 }
+        center: lokasiA || { lat: -6.2, lng: 106.8 },
+        styles: [
+          {
+            "featureType": "poi",
+            "elementType": "labels",
+            "stylers": [{ "visibility": "off" }]
+          },
+          {
+            "featureType": "transit",
+            "elementType": "labels",
+            "stylers": [{ "visibility": "off" }]
+          }
+        ]
       });
 
       directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
+      directionsRenderer = new google.maps.DirectionsRenderer({ 
+        map: map,
+        suppressMarkers: true
+      });
 
       if (lokasiA) {
         markerA = new google.maps.Marker({
           position: lokasiA,
           map: map,
           icon: {
-            url: iconUrls[vehicle] || null,
-            scaledSize: new google.maps.Size(40, 40)
-          }
+            url: iconUrls[vehicle] || iconUrls.motor,
+            scaledSize: new google.maps.Size(40, 40),
+            origin: new google.maps.Point(0, 0),
+            anchor: new google.maps.Point(20, 20)
+          },
+          title: "Lokasi Awal"
         });
 
         reverseGeocode(lokasiA, (alamat) => {
@@ -211,8 +254,11 @@
           map: map,
           icon: {
             url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-            scaledSize: new google.maps.Size(40, 40)
-          }
+            scaledSize: new google.maps.Size(40, 40),
+            origin: new google.maps.Point(0, 0),
+            anchor: new google.maps.Point(20, 20)
+          },
+          title: "Lokasi Tujuan"
         });
 
         reverseGeocode(lokasiB, (alamat) => {
@@ -231,13 +277,56 @@
       const fromInput = document.getElementById("fromInput");
       const toInput = document.getElementById("toInput");
 
-      new google.maps.places.Autocomplete(fromInput);
-      new google.maps.places.Autocomplete(toInput);
+      const autocompleteFrom = new google.maps.places.Autocomplete(fromInput);
+      const autocompleteTo = new google.maps.places.Autocomplete(toInput);
+
+      autocompleteFrom.addListener('place_changed', function() {
+        const place = autocompleteFrom.getPlace();
+        if (!place.geometry) return;
+        
+        if (markerA) markerA.setMap(null);
+        markerA = new google.maps.Marker({
+          position: place.geometry.location,
+          map: map,
+          icon: {
+            url: iconUrls[vehicle] || iconUrls.motor,
+            scaledSize: new google.maps.Size(40, 40)
+          }
+        });
+        
+        map.panTo(place.geometry.location);
+        if (markerB) tryDirection();
+      });
+
+      autocompleteTo.addListener('place_changed', function() {
+        const place = autocompleteTo.getPlace();
+        if (!place.geometry) return;
+        
+        if (markerB) markerB.setMap(null);
+        markerB = new google.maps.Marker({
+          position: place.geometry.location,
+          map: map,
+          icon: {
+            url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+            scaledSize: new google.maps.Size(40, 40)
+          }
+        });
+        
+        if (markerA) tryDirection();
+      });
     }
 
     function onLoad() {
-      initMap();
-      initAutocomplete();
+      try {
+        initMap();
+        initAutocomplete();
+      } catch (error) {
+        console.error("Error initializing map:", error);
+        sendToAppInventor({
+          status: "error",
+          message: "Gagal memuat peta: " + error.message
+        });
+      }
     }
   </script>
 
@@ -250,8 +339,17 @@
       script.defer = true;
       document.head.appendChild(script);
     } else {
-      alert("API Key Google Maps tidak ditemukan di URL.");
+      const errorMsg = "API Key Google Maps tidak ditemukan di URL.";
+      console.error(errorMsg);
       document.getElementById('radar').querySelector('span').textContent = 'Error: API Key tidak ditemukan';
+      
+      // Kirim error ke AppInventor
+      if (window.AppInventor) {
+        window.AppInventor.setWebViewString(JSON.stringify({
+          status: "error",
+          message: errorMsg
+        }));
+      }
     }
   </script>
 </body>
