@@ -70,6 +70,7 @@
     let map, directionsService, directionsRenderer;
     let markerA, markerB, circleB;
     let radarInterval;
+
     const urlParams = new URLSearchParams(window.location.search);
     const vehicle = urlParams.get("vehicle") || "motor";
     const fromParam = urlParams.get("from");
@@ -98,21 +99,15 @@
 
     function showRadar(message) {
       if (!markerA) return;
-      
-      // Fokus ke titik awal dengan zoom maksimum
       map.panTo(markerA.getPosition());
-      map.setZoom(18); // Zoom maksimum
-      
-      // Tampilkan radar
+      map.setZoom(18);
       const radar = document.getElementById('radar');
       radar.style.display = 'flex';
       radar.querySelector('span').textContent = message || 'Mencari Driver terdekat...';
-      
-      // Mulai animasi zoom out secara smooth
       let zoomLevel = 18;
       const zoomStep = 0.01;
       radarInterval = setInterval(() => {
-        if (zoomLevel > 12) { // Hentikan di zoom level 12
+        if (zoomLevel > 12) {
           zoomLevel -= zoomStep;
           map.setZoom(zoomLevel);
         }
@@ -132,8 +127,6 @@
 
     function sendToAppInventor(data) {
       const jsonData = JSON.stringify(data);
-      console.log("Mengirim data ke AppInventor:", jsonData);
-      
       if (window.AppInventor && window.AppInventor.setWebViewString) {
         window.AppInventor.setWebViewString(jsonData);
       }
@@ -142,9 +135,6 @@
       }
       else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.iosHandler) {
         window.webkit.messageHandlers.iosHandler.postMessage(jsonData);
-      }
-      else {
-        console.log("Data untuk AppInventor:", jsonData);
       }
     }
 
@@ -155,7 +145,6 @@
       const isMotor = vehicle === "motor";
 
       if (circleB) circleB.setMap(null);
-
       showRadar('Menghitung rute...');
 
       directionsService.route({
@@ -166,7 +155,6 @@
         avoidTolls: isMotor
       }, (res, status) => {
         hideRadar();
-        
         if (status === "OK") {
           directionsRenderer.setDirections(res);
           const leg = res.routes[0].legs[0];
@@ -205,7 +193,6 @@
 
           sendToAppInventor(hasil);
         } else {
-          console.error("Gagal menghitung rute:", status);
           sendToAppInventor({
             status: "error",
             message: "Gagal menghitung rute: " + status
@@ -218,38 +205,49 @@
       const lokasiA = getLatLng(fromParam);
       const lokasiB = getLatLng(toParam);
 
+      const styledMapType = new google.maps.StyledMapType(
+        [
+          { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+          { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
+          { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
+          { featureType: "poi", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+          { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+          { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+          { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+          { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+          { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
+          { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+          { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+          { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+          { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+          { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
+          { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] }
+        ],
+        { name: "Terang & Profesional" }
+      );
+
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 15,
         center: lokasiA || { lat: -6.2, lng: 106.8 },
-        mapId: "bdfcf9c6ad20d1891a0b43e9", // Style ID yang Anda tentukan
         clickableIcons: false,
         gestureHandling: "greedy"
       });
 
-      // Blokir info window saat klik peta
-      google.maps.event.addListener(map, 'click', function(event) {
-        // Tidak melakukan apa-apa
-      });
+      map.mapTypes.set("styled_map", styledMapType);
+      map.setMapTypeId("styled_map");
 
       directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({ 
-        map: map,
-        suppressMarkers: true
-      });
+      directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: true });
 
       if (lokasiA) {
         markerA = new google.maps.Marker({
           position: lokasiA,
           map: map,
-          icon: {
-            url: iconUrls[vehicle] || iconUrls.motor,
-            scaledSize: new google.maps.Size(40, 40),
-            origin: new google.maps.Point(0, 0),
-            anchor: new google.maps.Point(20, 20)
-          },
-          title: "Lokasi Awal"
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
-
         reverseGeocode(lokasiA, (alamat) => {
           document.getElementById("fromInput").value = alamat || "";
         });
@@ -261,44 +259,32 @@
           map: map,
           icon: {
             url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-            scaledSize: new google.maps.Size(40, 40),
-            origin: new google.maps.Point(0, 0),
-            anchor: new google.maps.Point(20, 20)
-          },
-          title: "Lokasi Tujuan"
+            scaledSize: new google.maps.Size(40, 40)
+          }
         });
-
         reverseGeocode(lokasiB, (alamat) => {
           document.getElementById("toInput").value = alamat || "";
         });
       }
 
-      if (lokasiA && lokasiB) {
-        tryDirection();
-      }
+      if (lokasiA && lokasiB) tryDirection();
     }
 
     function initAutocomplete() {
       const fromInput = document.getElementById("fromInput");
       const toInput = document.getElementById("toInput");
-
       const autocompleteFrom = new google.maps.places.Autocomplete(fromInput);
       const autocompleteTo = new google.maps.places.Autocomplete(toInput);
 
       autocompleteFrom.addListener('place_changed', function() {
         const place = autocompleteFrom.getPlace();
         if (!place.geometry) return;
-        
         if (markerA) markerA.setMap(null);
         markerA = new google.maps.Marker({
           position: place.geometry.location,
           map: map,
-          icon: {
-            url: iconUrls[vehicle] || iconUrls.motor,
-            scaledSize: new google.maps.Size(40, 40)
-          }
+          icon: { url: iconUrls[vehicle], scaledSize: new google.maps.Size(40, 40) }
         });
-        
         map.panTo(place.geometry.location);
         if (markerB) tryDirection();
       });
@@ -306,7 +292,6 @@
       autocompleteTo.addListener('place_changed', function() {
         const place = autocompleteTo.getPlace();
         if (!place.geometry) return;
-        
         if (markerB) markerB.setMap(null);
         markerB = new google.maps.Marker({
           position: place.geometry.location,
@@ -316,7 +301,6 @@
             scaledSize: new google.maps.Size(40, 40)
           }
         });
-        
         if (markerA) tryDirection();
       });
     }
@@ -326,11 +310,7 @@
         initMap();
         initAutocomplete();
       } catch (error) {
-        console.error("Error initializing map:", error);
-        sendToAppInventor({
-          status: "error",
-          message: "Gagal memuat peta: " + error.message
-        });
+        sendToAppInventor({ status: "error", message: "Gagal memuat peta: " + error.message });
       }
     }
   </script>
@@ -345,10 +325,8 @@
       document.head.appendChild(script);
     } else {
       const errorMsg = "API Key Google Maps tidak ditemukan di URL.";
-      console.error(errorMsg);
       document.getElementById('radar').style.display = 'flex';
       document.getElementById('radar').querySelector('span').textContent = 'Error: API Key tidak ditemukan';
-      
       if (window.AppInventor) {
         window.AppInventor.setWebViewString(JSON.stringify({
           status: "error",
