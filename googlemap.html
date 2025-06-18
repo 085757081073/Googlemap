@@ -110,13 +110,13 @@
       
       // Mulai animasi zoom out secara smooth
       let zoomLevel = 18;
-      const zoomStep = 0.05;
+      const zoomStep = 0.01;
       radarInterval = setInterval(() => {
         if (zoomLevel > 12) { // Hentikan di zoom level 12
           zoomLevel -= zoomStep;
           map.setZoom(zoomLevel);
         }
-      }, 50); // Interval lebih cepat untuk animasi lebih smooth
+      }, 100); // Interval lebih cepat untuk animasi lebih smooth
     }
 
     function reverseGeocode(latlng, callback) {
