@@ -348,6 +348,23 @@
         }));
       }
     }
+  
+  // Deteksi jika offline
+  window.addEventListener('offline', () => {
+    document.body.innerHTML = `
+      <div style="display:flex;justify-content:center;align-items:center;height:100vh;text-align:center;padding:20px;box-sizing:border-box;">
+        <div>
+          <h2 style="color:#d32f2f;">❌ Tidak ada koneksi internet</h2>
+          <p>Silakan periksa jaringan Anda dan muat ulang halaman.</p>
+        </div>
+      </div>
+    `;
+  });
+
+  // Cek jika sudah offline sejak awal
+  if (!navigator.onLine) {
+    window.dispatchEvent(new Event('offline'));
+  }
   </script>
 </body>
 </html>
