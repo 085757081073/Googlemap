@@ -45,6 +45,10 @@
       outline: none;
     }
     
+    .pac-container {
+      z-index: 10000 !important;
+    }
+    
     .radar {
       position: absolute;
       top: 50%;
@@ -97,7 +101,6 @@
       100% { -webkit-transform: scale(1.5); opacity: 0; }
     }
     
-    /* Loading spinner */
     .spinner {
       display: none;
       position: absolute;
@@ -140,9 +143,7 @@
   </div>
   <div class="spinner" id="spinner"></div>
 
-  <!-- JS & Maps -->
   <script>
-    // Gunakan IIFE untuk menghindari polusi global
     (function() {
       'use strict';
       
@@ -157,6 +158,7 @@
       const fromParam = urlParams.get("from");
       const toParam = urlParams.get("to");
       const hargaPerKm = parseFloat(urlParams.get("harga")) || 0;
+      const defaultCenter = { lat: -6.2, lng: 106.8 };
       
       const iconUrls = {
         motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
@@ -168,13 +170,6 @@
       };
       
       // Helper functions
-      const getLatLng = (val) => {
-        if (!val) return null;
-        const parts = val.split(',').map(Number);
-        return parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) ? 
-          { lat: parts[0], lng: parts[1] } : null;
-      };
-      
       function showLoading() {
         document.getElementById('spinner').style.display = 'block';
       }
@@ -183,31 +178,93 @@
         document.getElementById('spinner').style.display = 'none';
       }
       
+      function showRadar(message) {
+        const radar = document.getElementById('radar');
+        radar.style.display = 'flex';
+        radar.querySelector('span').textContent = message || 'Mencari...';
+      }
+      
       function hideRadar() {
         clearInterval(radarInterval);
         document.getElementById('radar').style.display = 'none';
       }
       
-      function showRadar(message) {
-        if (!markerA) return;
+      function initMap() {
+        showLoading();
         
-        map.panTo(markerA.getPosition());
-        map.setZoom(18);
+        // Buat peta
+        map = new google.maps.Map(document.getElementById("map"), {
+          zoom: 15,
+          center: defaultCenter,
+          clickableIcons: false,
+          gestureHandling: "greedy",
+          disableDefaultUI: true
+        });
         
-        const radar = document.getElementById('radar');
-        radar.style.display = 'flex';
-        radar.querySelector('span').textContent = message || 'Mencari...';
+        // Inisialisasi layanan
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer({ 
+          map: map, 
+          suppressMarkers: true
+        });
         
-        let zoomLevel = 18;
-        const zoomStep = 0.01;
+        hideLoading();
+        initAutocomplete();
         
-        clearInterval(radarInterval);
-        radarInterval = setInterval(() => {
-          if (zoomLevel > 12) {
-            zoomLevel -= zoomStep;
-            map.setZoom(zoomLevel);
+        // Jika ada parameter lokasi
+        const lokasiA = fromParam ? parseLatLng(fromParam) : null;
+        const lokasiB = toParam ? parseLatLng(toParam) : null;
+        
+        if (lokasiA) {
+          addMarkerA(lokasiA);
+          if (lokasiB) {
+            addMarkerB(lokasiB);
+            calculateRoute(lokasiA, lokasiB);
           }
-        }, 150);
+        }
+      }
+      
+      function parseLatLng(value) {
+        const parts = value.split(',').map(Number);
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          return { lat: parts[0], lng: parts[1] };
+        }
+        return null;
+      }
+      
+      function addMarkerA(position) {
+        if (markerA) markerA.setMap(null);
+        
+        markerA = new google.maps.Marker({
+          position: position,
+          map: map,
+          icon: { 
+            url: iconUrls[vehicle], 
+            scaledSize: new google.maps.Size(40, 40) 
+          }
+        });
+        
+        map.panTo(position);
+        reverseGeocode(position, (alamat) => {
+          document.getElementById("fromInput").value = alamat || position.lat + ',' + position.lng;
+        });
+      }
+      
+      function addMarkerB(position) {
+        if (markerB) markerB.setMap(null);
+        
+        markerB = new google.maps.Marker({
+          position: position,
+          map: map,
+          icon: {
+            url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+            scaledSize: new google.maps.Size(40, 40)
+          }
+        });
+        
+        reverseGeocode(position, (alamat) => {
+          document.getElementById("toInput").value = alamat || position.lat + ',' + position.lng;
+        });
       }
       
       function reverseGeocode(latlng, callback) {
@@ -219,84 +276,38 @@
           if (status === 'OK' && results[0]) {
             callback(results[0].formatted_address);
           } else {
-            console.error('Geocoder error:', status);
             callback(null);
           }
         });
       }
       
-      function sendToAppInventor(data) {
-        const jsonData = JSON.stringify(data);
-        try {
-          if (window.AppInventor && window.AppInventor.setWebViewString) {
-            window.AppInventor.setWebViewString(jsonData);
-          }
-          else if (window.AndroidInterface) {
-            window.AndroidInterface.receiveData(jsonData);
-          }
-          else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.iosHandler) {
-            window.webkit.messageHandlers.iosHandler.postMessage(jsonData);
-          }
-        } catch (e) {
-          console.error('Error sending to App Inventor:', e);
-        }
-      }
-      
       function calculateRoute(from, to) {
-        if (circleB) circleB.setMap(null);
         showRadar('Menghitung rute...');
-        
-        const isMotor = vehicle === "motor";
         
         directionsService.route({
           origin: from,
           destination: to,
           travelMode: google.maps.TravelMode.DRIVING,
           region: "ID",
-          avoidTolls: isMotor
-        }, (res, status) => {
+          avoidTolls: vehicle === "motor"
+        }, (response, status) => {
           hideRadar();
           
           if (status === "OK") {
-            directionsRenderer.setDirections(res);
-            const leg = res.routes[0].legs[0];
-            const durasiTraffic = leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text;
+            directionsRenderer.setDirections(response);
+            const leg = response.routes[0].legs[0];
             
-            // Tambahkan circle di tujuan
-            circleB = new google.maps.Circle({
-              center: to,
-              radius: 50,
-              map: map,
-              strokeColor: "#4285f4",
-              strokeOpacity: 0.5,
-              strokeWeight: 2,
-              fillColor: "#4285f4",
-              fillOpacity: 0.1
-            });
-            
-            const jarakKm = leg.distance.value / 1000;
-            const harga = Math.round(jarakKm * hargaPerKm);
-            
-            const hasil = {
+            // Kirim data ke App Inventor
+            sendToAppInventor({
+              status: "success",
               jarak: leg.distance.text,
-              jarak_km: jarakKm,
               durasi: leg.duration.text,
-              durasi_traffic: durasiTraffic,
-              harga_per_km: hargaPerKm,
-              harga_total: harga,
-              alamat_a: document.getElementById("fromInput").value,
-              alamat_b: document.getElementById("toInput").value,
-              from_lat: from.lat(),
-              from_lng: from.lng(),
-              to_lat: to.lat(),
-              to_lng: to.lng(),
-              vehicle: vehicle,
-              status: "success"
-            };
-            
-            sendToAppInventor(hasil);
+              from_lat: from.lat,
+              from_lng: from.lng,
+              to_lat: to.lat,
+              to_lng: to.lng
+            });
           } else {
-            console.error('Directions request failed:', status);
             sendToAppInventor({
               status: "error",
               message: "Gagal menghitung rute: " + status
@@ -305,162 +316,48 @@
         });
       }
       
-      function initMap() {
-        const lokasiA = getLatLng(fromParam);
-        const lokasiB = getLatLng(toParam);
-        
-        // Style peta
-        const styledMapType = new google.maps.StyledMapType(
-          [
-            { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
-            { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-            { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-            { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
-            { featureType: "administrative.land_parcel", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-            { featureType: "poi", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
-            { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-            { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
-            { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-            { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-            { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-            { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
-            { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-            { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-            { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
-            { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
-            { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
-            { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] }
-          ],
-          { name: "Terang & Profesional" }
-        );
-        
-        // Buat peta
-        map = new google.maps.Map(document.getElementById("map"), {
-          zoom: 15,
-          center: lokasiA || { lat: -6.2, lng: 106.8 },
-          clickableIcons: false,
-          gestureHandling: "greedy",
-          disableDefaultUI: true
-        });
-        
-        // Terapkan style peta
-        map.mapTypes.set("styled_map", styledMapType);
-        map.setMapTypeId("styled_map");
-        
-        // Inisialisasi layanan directions
-        directionsService = new google.maps.DirectionsService();
-        directionsRenderer = new google.maps.DirectionsRenderer({ 
-          map: map, 
-          suppressMarkers: true,
-          preserveViewport: true
-        });
-        
-        // Tambahkan marker A jika ada
-        if (lokasiA) {
-          markerA = new google.maps.Marker({
-            position: lokasiA,
-            map: map,
-            icon: { 
-              url: iconUrls[vehicle], 
-              scaledSize: new google.maps.Size(40, 40) 
-            }
-          });
-          
-          reverseGeocode(lokasiA, (alamat) => {
-            document.getElementById("fromInput").value = alamat || "";
-          });
-        }
-        
-        // Tambahkan marker B jika ada
-        if (lokasiB) {
-          markerB = new google.maps.Marker({
-            position: lokasiB,
-            map: map,
-            icon: {
-              url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-              scaledSize: new google.maps.Size(40, 40)
-            }
-          });
-          
-          reverseGeocode(lokasiB, (alamat) => {
-            document.getElementById("toInput").value = alamat || "";
-          });
-        }
-        
-        // Hitung rute jika kedua titik ada
-        if (lokasiA && lokasiB) {
-          calculateRoute(lokasiA, lokasiB);
-        }
-      }
-      
       function initAutocomplete() {
-        const fromInput = document.getElementById("fromInput");
-        const toInput = document.getElementById("toInput");
-        
-        // Batasi hasil autocomplete ke Indonesia
-        const options = {
-          componentRestrictions: { country: "id" },
-          fields: ["geometry", "formatted_address"]
-        };
-        
-        const autocompleteFrom = new google.maps.places.Autocomplete(fromInput, options);
-        const autocompleteTo = new google.maps.places.Autocomplete(toInput, options);
-        
-        autocompleteFrom.addListener('place_changed', function() {
-          const place = autocompleteFrom.getPlace();
-          if (!place.geometry) {
-            console.warn('Tempat tidak ditemukan');
-            return;
-          }
+        try {
+          const fromInput = document.getElementById("fromInput");
+          const toInput = document.getElementById("toInput");
           
-          if (markerA) markerA.setMap(null);
+          const options = {
+            componentRestrictions: { country: "id" },
+            fields: ["geometry", "formatted_address"]
+          };
           
-          markerA = new google.maps.Marker({
-            position: place.geometry.location,
-            map: map,
-            icon: { 
-              url: iconUrls[vehicle], 
-              scaledSize: new google.maps.Size(40, 40) 
+          const autocompleteFrom = new google.maps.places.Autocomplete(fromInput, options);
+          const autocompleteTo = new google.maps.places.Autocomplete(toInput, options);
+          
+          autocompleteFrom.addListener('place_changed', function() {
+            const place = autocompleteFrom.getPlace();
+            if (place.geometry) {
+              addMarkerA(place.geometry.location);
+              if (markerB) calculateRoute(place.geometry.location, markerB.getPosition());
             }
           });
           
-          map.panTo(place.geometry.location);
-          if (markerB) calculateRoute(place.geometry.location, markerB.getPosition());
-        });
-        
-        autocompleteTo.addListener('place_changed', function() {
-          const place = autocompleteTo.getPlace();
-          if (!place.geometry) {
-            console.warn('Tempat tidak ditemukan');
-            return;
-          }
-          
-          if (markerB) markerB.setMap(null);
-          
-          markerB = new google.maps.Marker({
-            position: place.geometry.location,
-            map: map,
-            icon: {
-              url: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-              scaledSize: new google.maps.Size(40, 40)
+          autocompleteTo.addListener('place_changed', function() {
+            const place = autocompleteTo.getPlace();
+            if (place.geometry) {
+              addMarkerB(place.geometry.location);
+              if (markerA) calculateRoute(markerA.getPosition(), place.geometry.location);
             }
           });
-          
-          if (markerA) calculateRoute(markerA.getPosition(), place.geometry.location);
-        });
+        } catch (error) {
+          console.error('Autocomplete error:', error);
+        }
       }
       
-      function onLoad() {
+      function sendToAppInventor(data) {
         try {
-          initMap();
-          initAutocomplete();
-        } catch (error) {
-          console.error('Error initializing map:', error);
-          showRadar('Error memuat peta');
-          sendToAppInventor({ 
-            status: "error", 
-            message: "Gagal memuat peta: " + error.message 
-          });
+          const jsonData = JSON.stringify(data);
+          if (window.AppInventor) {
+            window.AppInventor.setWebViewString(jsonData);
+          }
+          console.log('Data sent:', data);
+        } catch (e) {
+          console.error('Error sending data:', e);
         }
       }
       
@@ -468,25 +365,17 @@
       const keyParam = urlParams.get("key");
       if (keyParam) {
         const script = document.createElement("script");
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&libraries=places&callback=onLoad`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${keyParam}&libraries=places&callback=initMap`;
         script.async = true;
         script.defer = true;
-        script.onerror = () => {
+        script.onerror = function() {
           showRadar('Gagal memuat Google Maps');
-          sendToAppInventor({
-            status: "error",
-            message: "Gagal memuat Google Maps API"
-          });
+          console.error('Failed to load Google Maps API');
         };
         document.head.appendChild(script);
       } else {
-        const errorMsg = "API Key Google Maps tidak ditemukan di URL.";
         showRadar('Error: API Key tidak ditemukan');
-        
-        sendToAppInventor({
-          status: "error",
-          message: errorMsg
-        });
+        console.error('API Key not found in URL');
       }
     })();
   </script>
