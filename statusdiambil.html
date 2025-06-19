@@ -1,0 +1,46 @@
+<!DOCTYPE html><html>
+<head>
+  <meta charset="UTF-8">
+  <title>Listener Orderan Diambil</title>
+</head>
+<body>
+  <h3>Menunggu status order "diambil"...</h3>
+  <audio id="notifSound" src="https://085757081073.github.io/Order/arpeggio-467.mp3" preload="auto"></audio>  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const firebaseURL = urlParams.get("firebase_url");
+    const firebaseKey = urlParams.get("firebase_key");
+    const bucket = urlParams.get("firebase_bucket");
+    const userID = urlParams.get("userID");
+
+    if (!firebaseURL || !firebaseKey || !bucket || !userID) {
+      alert("Parameter tidak lengkap di URL.");
+    }
+
+    const script1 = document.createElement("script");
+    script1.src = "https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js";
+    document.head.appendChild(script1);
+
+    const script2 = document.createElement("script");
+    script2.src = "https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js";
+    document.head.appendChild(script2);
+
+    script2.onload = () => {
+      const config = {
+        apiKey: firebaseKey,
+        databaseURL: firebaseURL
+      };
+      firebase.initializeApp(config);
+      const db = firebase.database();
+
+      db.ref(`${bucket}/${userID}/status`).on("value", snapshot => {
+        const status = snapshot.val();
+        if (status === "diambil") {
+          document.getElementById("notifSound").play().catch(() => {});
+          if (window.WebViewInterface) {
+            window.WebViewInterface.setWebViewString("status_diambil");
+          }
+        }
+      });
+    };
+  </script></body>
+</html>
