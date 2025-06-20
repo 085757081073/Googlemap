@@ -36,8 +36,8 @@
         const status = snapshot.val();
         if (status === "diambil") {
           document.getElementById("notifSound").play().catch(() => {});
-          if (window.WebViewInterface) {
-            window.WebViewInterface.setWebViewString("status_diambil");
+          if (window.AppInventor) {
+  window.AppInventor.setWebViewString("status_diambil");
           }
         }
       });
